@@ -1,0 +1,2100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#14171a" />
+<title>Bat Survey</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+:root {
+  --bg: #14171a; --bg-elevated: #1e2227; --bg-card: #232830; --border: #353c45;
+  --text: #eef1f4; --text-muted: #9aa5b1; --text-faint: #6b7480;
+  --accent: #e8833a; --accent-dim: #5a4128; --accent-text: #1a1208;
+  --teal: #4fb8a8; --teal-dim: #1f3d38; --danger: #e85a6a; --danger-dim: #3d2226;
+  --setup: #9aa5b1; --active: #4fb8a8; --closed: #6b7480;
+  --radius: 10px; --radius-lg: 16px;
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--font-body); -webkit-font-smoothing:antialiased; }
+#root, .app-shell { min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; max-width:480px; margin:0 auto; background:var(--bg); position:relative; }
+.header-wrap { position:sticky; top:0; z-index:10; background:var(--bg-elevated); border-bottom:1px solid var(--border); padding-top:env(safe-area-inset-top); }
+.brand-bar { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-faint); padding:8px 16px 0; text-align:center; }
+.header { display:flex; align-items:center; gap:12px; padding:6px 16px 14px; }
+.header-text { flex:1; min-width:0; }
+.header-title { font-family:var(--font-display); font-weight:600; font-size:19px; letter-spacing:0.01em; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.header-subtitle { font-size:12px; color:var(--text-muted); margin-top:2px; text-transform:uppercase; letter-spacing:0.08em; font-family:var(--font-mono); }
+.identity-pill { display:flex; align-items:center; gap:6px; background:var(--bg-card); border:1px solid var(--border); border-radius:100px; padding:6px 12px; color:var(--text); font-size:12px; font-weight:600; cursor:pointer; flex-shrink:0; }
+.identity-pill svg { width:14px; height:14px; }
+.back-btn { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:var(--text); cursor:pointer; flex-shrink:0; font-size:18px; }
+.content { flex:1; padding:14px 16px 100px; overflow-y:auto; }
+.tab-bar { display:flex; border-bottom:1px solid var(--border); background:var(--bg-elevated); }
+.sync-indicator { display:flex; align-items:center; gap:6px; justify-content:center; font-size:11px; font-weight:600; padding:6px 12px; background:var(--bg-elevated); border-bottom:1px solid var(--border); }
+.sync-on { color:var(--teal); }
+.sync-off { color:var(--text-faint); }
+.sync-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
+.sync-on .sync-dot { animation:pulse-dot 2s infinite; }
+.tab-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 4px; background:none; border:none; border-bottom:2px solid transparent; color:var(--text-faint); font-size:11px; font-family:var(--font-body); font-weight:500; letter-spacing:0.02em; cursor:pointer; }
+.tab-btn svg { width:16px; height:16px; }
+.tab-btn-active { color:var(--accent); border-bottom-color:var(--accent); }
+.card-list { display:flex; flex-direction:column; gap:8px; }
+.card-with-actions { display:flex; align-items:center; gap:8px; }
+.card-with-actions .card { width:auto; }
+.card { display:flex; align-items:center; gap:12px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; text-align:left; width:100%; color:inherit; font-family:inherit; cursor:pointer; }
+.card-tap:active { background:var(--bg-elevated); }
+.card-main { flex:1; min-width:0; }
+.card-title { font-family:var(--font-display); font-weight:600; font-size:16px; }
+.card-sub { font-size:12px; color:var(--text-muted); margin-top:3px; font-family:var(--font-mono); }
+.card-chevron { color:var(--text-faint); flex-shrink:0; }
+.pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:100px; text-transform:uppercase; letter-spacing:0.06em; flex-shrink:0; }
+.pill-setup { background:rgba(154,165,177,0.15); color:var(--setup); }
+.pill-active { background:rgba(79,184,168,0.15); color:var(--active); }
+.pill-closed { background:rgba(107,116,128,0.15); color:var(--closed); }
+.empty-state { display:flex; flex-direction:column; align-items:center; text-align:center; padding:60px 24px 30px; color:var(--text-muted); }
+.empty-icon { width:64px; height:64px; border-radius:50%; background:var(--bg-card); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--accent); margin-bottom:16px; }
+.empty-title { font-family:var(--font-display); font-weight:600; font-size:17px; color:var(--text); margin-bottom:6px; }
+.empty-text { font-size:13px; line-height:1.5; max-width:320px; }
+.fab { position:fixed; bottom:max(24px, env(safe-area-inset-bottom)); right:calc(50% - 240px + 20px); width:56px; height:56px; border-radius:50%; background:var(--accent); color:var(--accent-text); border:none; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(232,131,58,0.4); cursor:pointer; z-index:20; }
+@media (max-width:480px) { .fab { right:20px; } }
+.fab:active { transform:scale(0.96); }
+.modal-overlay { position:fixed; inset:0; background:rgba(10,12,14,0.7); display:flex; align-items:flex-end; justify-content:center; z-index:5000; }
+.modal { background:var(--bg-elevated); border-radius:var(--radius-lg) var(--radius-lg) 0 0; width:100%; max-width:480px; max-height:85vh; overflow-y:auto; border:1px solid var(--border); border-bottom:none; animation:slideUp 0.2s ease-out; padding-bottom: env(safe-area-inset-bottom); }
+@keyframes slideUp { from {transform:translateY(20px); opacity:0;} to {transform:translateY(0); opacity:1;} }
+.modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg-elevated); }
+.modal-title { font-family:var(--font-display); font-weight:600; font-size:17px; }
+.modal-close { background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; font-size:20px; }
+.modal-body { padding:16px 18px 20px; }
+.modal-text { font-size:13px; color:var(--text-muted); line-height:1.5; margin:0 0 4px; }
+.modal-actions { display:flex; gap:10px; margin-top:18px; }
+.modal-actions .btn { flex:1; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; font-family:var(--font-body); font-weight:600; font-size:14px; padding:11px 16px; border-radius:var(--radius); border:1px solid transparent; cursor:pointer; transition:opacity 0.15s, transform 0.05s; }
+.btn:active { transform:scale(0.98); }
+.btn:disabled { opacity:0.4; cursor:not-allowed; }
+.btn-primary { background:var(--accent); color:var(--accent-text); }
+.btn-secondary { background:var(--bg-card); color:var(--text); border-color:var(--border); }
+.btn-danger { background:var(--danger-dim); color:var(--danger); border-color:var(--danger); }
+.btn-full { width:100%; }
+.btn-small { padding:9px 12px; font-size:13px; white-space:nowrap; }
+.btn-icon { background:var(--bg-card); color:var(--accent); border-color:var(--border); padding:11px; flex-shrink:0; }
+.btn svg { width:16px; height:16px; flex-shrink:0; }
+.section { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px; margin-bottom:12px; }
+.section-title { font-family:var(--font-display); font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:0.08em; color:var(--accent); margin-bottom:14px; }
+.field-row { margin-bottom:14px; }
+.field-row:last-child { margin-bottom:0; }
+.field-label { display:block; font-size:12px; font-weight:500; color:var(--text-muted); margin-bottom:6px; }
+.text-input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:11px 12px; color:var(--text); font-family:var(--font-body); font-size:15px; }
+.text-input:focus { outline:2px solid var(--accent); outline-offset:-1px; border-color:var(--accent); }
+.textarea { resize:vertical; font-family:var(--font-body); }
+.inline-field { display:flex; gap:8px; align-items:stretch; }
+.inline-field .text-input { flex:1; }
+.field-hint { font-size:11px; color:var(--text-faint); margin-top:6px; line-height:1.4; }
+.field-hint-error { color:var(--danger); }
+.segmented { display:flex; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:3px; gap:3px; }
+.segment { flex:1; display:flex; align-items:center; justify-content:center; gap:6px; padding:8px; background:none; border:none; border-radius:6px; color:var(--text-muted); font-size:13px; font-weight:600; cursor:pointer; }
+.segment svg { width:14px; height:14px; }
+.segment-active { background:var(--accent); color:var(--accent-text); }
+.photo-preview { display:flex; flex-direction:column; gap:10px; }
+.photo-preview img { width:100%; border-radius:8px; border:1px solid var(--border); display:block; }
+.photo-tap-wrap { position:relative; width:100%; border-radius:8px; overflow:hidden; border:1px solid var(--border); cursor:crosshair; line-height:0; }
+.photo-tap-wrap img { width:100%; display:block; user-select:none; -webkit-user-select:none; }
+.photo-tap-marker { position:absolute; width:22px; height:22px; border-radius:50%; background:var(--accent); border:3px solid #fff; box-shadow:0 0 6px rgba(0,0,0,0.6); transform:translate(-50%,-50%); pointer-events:none; }
+.photo-tap-marker-star { border:none; box-shadow:none; border-radius:0; width:28px; height:28px; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); filter: drop-shadow(0 0 3px rgba(0,0,0,0.8)); }
+.spinner { width:16px; height:16px; border:2px solid var(--text-faint); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.placeholder-tab { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:80px 24px; color:var(--text-muted); font-size:14px; line-height:1.6; }
+.muted-small { font-size:12px; color:var(--text-faint); margin-top:8px; }
+
+.map-tab { display:flex; flex-direction:column; gap:10px; }
+.map-toolbar { display:flex; gap:8px; justify-content:space-between; }
+.map-container { width:100%; height:340px; border-radius:var(--radius-lg); border:1px solid var(--border); overflow:hidden; background:var(--bg-card); }
+.map-banner { background:var(--accent-dim); color:var(--accent); font-size:12px; font-weight:600; padding:10px 12px; border-radius:8px; text-align:center; }
+.link-btn { background:none; border:none; color:var(--accent); text-decoration:underline; font-weight:700; cursor:pointer; padding:0 4px; font-size:inherit; }
+.eq-marker { width:16px; height:16px; border:2px solid #fff; box-shadow:0 0 4px rgba(0,0,0,0.5); }
+.eq-marker-circle { border-radius:50%; }
+.eq-marker-square { border-radius:3px; }
+.obs-marker { width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 3px rgba(0,0,0,0.5); }
+.obs-marker-star { width:18px; height:18px; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); filter: drop-shadow(0 0 2px rgba(0,0,0,0.7)); }
+.surveyor-dot { width:16px; height:16px; border-radius:50%; background:var(--teal); border:2px solid #fff; box-shadow:0 0 0 6px rgba(79,184,168,0.25); animation:pulse-dot 2s infinite; position:relative; }
+.surveyor-dot-other { background:var(--accent); box-shadow:0 0 0 6px rgba(232,131,58,0.25); animation:none; }
+.surveyor-label { position:absolute; top:-22px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:700; color:var(--text); background:var(--bg-elevated); border:1px solid var(--border); border-radius:4px; padding:1px 5px; white-space:nowrap; }
+@keyframes pulse-dot { 0%,100% { box-shadow:0 0 0 6px rgba(79,184,168,0.25); } 50% { box-shadow:0 0 0 10px rgba(79,184,168,0.08); } }
+.surveyor-dot-mini { width:12px!important; height:12px!important; border-radius:50%; background:var(--teal); border:2px solid #fff; }
+.legend { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 14px; }
+.legend-title { font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-faint); font-weight:600; margin-bottom:8px; }
+.legend-grid { display:flex; flex-direction:column; gap:6px; }
+.legend-item { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-muted); }
+.legend-swatch { width:14px; height:14px; flex-shrink:0; }
+.legend-circle { border-radius:50%; }
+.legend-square { border-radius:3px; }
+.bearing-dial-wrap { display:flex; align-items:center; gap:16px; }
+.bearing-dial { width:88px; height:88px; border-radius:50%; background:var(--bg); border:2px solid var(--border); position:relative; cursor:grab; flex-shrink:0; touch-action:none; }
+.dial-face { width:100%; height:100%; position:relative; }
+.dial-n { position:absolute; top:4px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:700; color:var(--accent); }
+.dial-needle { position:absolute; bottom:50%; left:50%; width:2px; height:38px; background:var(--accent); transform-origin:bottom center; margin-left:-1px; }
+.dial-needle-tip { position:absolute; top:-4px; left:-3px; width:8px; height:8px; border-radius:50%; background:var(--accent); }
+.dial-center { position:absolute; top:50%; left:50%; width:6px; height:6px; border-radius:50%; background:var(--text-muted); transform:translate(-50%,-50%); }
+.dial-controls { flex:1; }
+.dial-readout { font-family:var(--font-mono); font-size:22px; font-weight:600; color:var(--text); margin-bottom:8px; }
+.dial-steppers { display:flex; gap:6px; }
+.dial-steppers .btn { flex:1; padding:8px 4px; }
+.obs-card { position:relative; padding-left:10px; }
+.obs-color-bar { width:4px; border-radius:2px; flex-shrink:0; align-self:stretch; min-height:36px; }
+.obs-notes { font-size:12px; color:var(--text-muted); margin-top:4px; font-style:italic; }
+.notes-input-wrap { position:relative; }
+.notes-input-wrap .textarea { padding-right:44px; }
+.voice-btn { position:absolute; right:8px; top:8px; width:32px; height:32px; border-radius:50%; background:var(--bg-elevated); border:1px solid var(--border); color:var(--accent); display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.voice-btn svg { width:16px; height:16px; }
+.voice-btn-active { background:var(--danger-dim); color:var(--danger); border-color:var(--danger); animation:pulse-dot 1.2s infinite; }
+.leaflet-container { background:var(--bg-card); font-family:var(--font-body); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background:var(--bg-elevated); color:var(--text); }
+.leaflet-control-attribution { background: rgba(20,23,26,0.7) !important; color: var(--text-faint) !important; }
+.leaflet-control-attribution a { color: var(--text-muted) !important; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+/* ============================================================
+   CONSTANTS
+   ============================================================ */
+const KIT_TYPES = {
+  DJI_M4T: { label: 'DJI Matrice 4T', fov: 45, defaultRadius: 85, category: 'nva', color: '#E8833A', shape: 'wedge' },
+  DJI_M30T: { label: 'DJI Matrice 30T', fov: 61, defaultRadius: 85, category: 'nva', color: '#6FBF73', shape: 'wedge' },
+  TK612: { label: 'Guide TK612 Gen2', fov: 44.3, defaultRadius: 50, category: 'nva', color: '#5BA3D0', shape: 'wedge' },
+  ACOUSTIC: { label: 'Acoustic Detector', fov: null, defaultRadius: null, category: 'acoustic', color: '#B266D6', shape: 'square' },
+  OTHER: { label: 'Other', fov: 45, defaultRadius: 50, category: 'nva', color: '#999999', shape: 'wedge' },
+};
+const ACTIVITY_TYPES = [
+  { id: 'emergence', label: 'Emergence' },
+  { id: 'return', label: 'Return / re-entry' },
+  { id: 'commuting', label: 'Commuting' },
+  { id: 'foraging', label: 'Foraging' },
+  { id: 'social', label: 'Social call' },
+  { id: 'swarming', label: 'Swarming' },
+  { id: 'unknown', label: 'Unknown / unidentified' },
+];
+const ACTIVITY_COLORS = { emergence:'#E8833A', return:'#5BA3D0', commuting:'#6FBF73', foraging:'#D6C04A', social:'#B266D6', swarming:'#E85A6A', unknown:'#999999' };
+const UK_SPECIES = ['Common pipistrelle','Soprano pipistrelle',"Nathusius' pipistrelle",'Brown long-eared bat','Grey long-eared bat',"Daubenton's bat","Natterer's bat","Bechstein's bat",'Whiskered bat',"Brandt's bat",'Serotine','Noctule',"Leisler's bat",'Barbastelle','Greater horseshoe bat','Lesser horseshoe bat','Unidentified bat species'];
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+const STORAGE_KEY = 'batsurvey_data_v1';
+const IDENTITY_KEY = 'batsurvey_identity_v1';
+const COORDINATOR_PIN = '2026'; // shared PIN for coordinator/superuser access — change as needed
+
+function loadData() {
+  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); } catch(e){}
+  return { projects: [] };
+}
+function saveData(data) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e){} }
+function loadIdentity() {
+  try { const raw = localStorage.getItem(IDENTITY_KEY); if (raw) return JSON.parse(raw); } catch(e){}
+  return null;
+}
+function saveIdentity(identity) { try { localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity)); } catch(e){} }
+function uid() { return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
+function todayStr() { return new Date().toISOString().slice(0,10); }
+function nowTimeStr() { return new Date().toTimeString().slice(0,5); }
+
+/* ============================================================
+   FIREBASE — Realtime Database sync (graceful no-op if unavailable)
+   ============================================================ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyA3KtbST1u6xfReD5Jqmlb7dxVRQENuh1s",
+  authDomain: "ae-batassist.firebaseapp.com",
+  databaseURL: "https://ae-batassist-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "ae-batassist",
+  storageBucket: "ae-batassist.firebasestorage.app",
+  messagingSenderId: "1022233688076",
+  appId: "1:1022233688076:web:4e2a95562f9aa4b8a91629"
+};
+
+let fbDb = null;
+try {
+  if (window.firebase) {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fbDb = firebase.database();
+  }
+} catch (e) { console.error('Firebase init failed', e); fbDb = null; }
+
+function syncKey(projectId, sessionId) { return `sync/${projectId}_${sessionId}`; }
+function fbKey(s) { return String(s).replace(/[.#$\[\]\/]/g, '_'); }
+
+function calcSunset(lat, lon, date) {
+  const d = new Date(date);
+  const dayOfYear = Math.floor((d - new Date(d.getFullYear(),0,0)) / 86400000);
+  const zenith = 90.833;
+  const lngHour = lon/15;
+  const t = dayOfYear + ((18-lngHour)/24);
+  const M = (0.9856*t) - 3.289;
+  let L = M + (1.916*Math.sin(M*Math.PI/180)) + (0.020*Math.sin(2*M*Math.PI/180)) + 282.634;
+  L = ((L%360)+360)%360;
+  let RA = Math.atan(0.91764*Math.tan(L*Math.PI/180))*180/Math.PI;
+  RA = ((RA%360)+360)%360;
+  const Lq = Math.floor(L/90)*90, RAq = Math.floor(RA/90)*90;
+  RA = (RA + (Lq-RAq))/15;
+  const sinDec = 0.39782*Math.sin(L*Math.PI/180);
+  const cosDec = Math.cos(Math.asin(sinDec));
+  const cosH = (Math.cos(zenith*Math.PI/180) - (sinDec*Math.sin(lat*Math.PI/180))) / (cosDec*Math.cos(lat*Math.PI/180));
+  if (cosH > 1 || cosH < -1) return null;
+  let H = Math.acos(cosH)*180/Math.PI/15;
+  const T = H + RA - (0.06571*t) - 6.622;
+  let UT = ((T-lngHour)%24+24)%24;
+  const tz = -d.getTimezoneOffset()/60;
+  let lt = ((UT+tz)%24+24)%24;
+  const hh = Math.floor(lt), mm = Math.round((lt-hh)*60);
+  return String(hh).padStart(2,'0')+':'+String(mm%60).padStart(2,'0');
+}
+
+function destPoint(lat, lon, bearingDeg, distM) {
+  const R = 6371000;
+  const brng = bearingDeg*Math.PI/180, lat1 = lat*Math.PI/180, lon1 = lon*Math.PI/180;
+  const lat2 = Math.asin(Math.sin(lat1)*Math.cos(distM/R) + Math.cos(lat1)*Math.sin(distM/R)*Math.cos(brng));
+  const lon2 = lon1 + Math.atan2(Math.sin(brng)*Math.sin(distM/R)*Math.cos(lat1), Math.cos(distM/R)-Math.sin(lat1)*Math.sin(lat2));
+  return [lat2*180/Math.PI, lon2*180/Math.PI];
+}
+function wedgePolygon(lat, lon, bearingDeg, fovDeg, radiusM, steps=10) {
+  const points = [[lat,lon]];
+  const start = bearingDeg - fovDeg/2, end = bearingDeg + fovDeg/2;
+  for (let i=0;i<=steps;i++) points.push(destPoint(lat,lon, start+(end-start)*(i/steps), radiusM));
+  points.push([lat,lon]);
+  return points;
+}
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+/* ============================================================
+   FIREBASE SYNC HOOK
+   ============================================================
+   Subscribes to remote equipment/observations/meta/surveyors for a
+   session and upserts them into local state via onUpdate. Provides
+   push functions to write local changes to Firebase. Degrades to a
+   set of no-ops if Firebase is unavailable — app works fully offline
+   on local data in that case.
+
+   NOTE: photos (sitePhoto, equipment.photo) and referenceLayers are
+   intentionally excluded from sync (kept local-only).
+   ============================================================ */
+function useFirebaseSync(projectId, sessionId, session, onUpdate, identity) {
+  const [connected, setConnected] = useState(false);
+  const [otherSurveyors, setOtherSurveyors] = useState({});
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+
+  useEffect(() => {
+    if (!fbDb || !projectId || !sessionId) return;
+    const key = syncKey(projectId, sessionId);
+
+    const connRef = fbDb.ref('.info/connected');
+    const connHandler = (snap) => setConnected(!!snap.val());
+    connRef.on('value', connHandler);
+
+    // Equipment: upsert by id
+    const eqRef = fbDb.ref(`${key}/equipment`);
+    const eqHandler = (snap) => {
+      const remote = snap.val() || {};
+      const current = sessionRef.current.equipment || [];
+      const byId = {};
+      current.forEach(e => { byId[e.id] = e; });
+      let changed = false;
+      Object.entries(remote).forEach(([id, item]) => {
+        if (!byId[id] || (item.updatedAt || 0) > (byId[id].updatedAt || 0)) {
+          byId[id] = item;
+          changed = true;
+        }
+      });
+      // Remove items that exist locally but not remotely (were deleted elsewhere)
+      // Only do this for items that have been seen remotely before (have updatedAt)
+      Object.keys(byId).forEach(id => {
+        if (byId[id].updatedAt && !remote[id]) {
+          delete byId[id];
+          changed = true;
+        }
+      });
+      if (changed) onUpdate({ equipment: Object.values(byId) });
+    };
+    eqRef.on('value', eqHandler);
+
+    // Observations: upsert by id
+    const obsRef = fbDb.ref(`${key}/observations`);
+    const obsHandler = (snap) => {
+      const remote = snap.val() || {};
+      const current = sessionRef.current.observations || [];
+      const byId = {};
+      current.forEach(o => { byId[o.id] = o; });
+      let changed = false;
+      Object.entries(remote).forEach(([id, item]) => {
+        if (!byId[id] || (item.updatedAt || 0) > (byId[id].updatedAt || 0)) {
+          byId[id] = item;
+          changed = true;
+        }
+      });
+      Object.keys(byId).forEach(id => {
+        if (byId[id].updatedAt && !remote[id]) {
+          delete byId[id];
+          changed = true;
+        }
+      });
+      if (changed) onUpdate({ observations: Object.values(byId) });
+    };
+    obsRef.on('value', obsHandler);
+
+    // Meta (setup fields): whole-blob, last-write-wins
+    const metaRef = fbDb.ref(`${key}/meta`);
+    const metaHandler = (snap) => {
+      const remote = snap.val();
+      if (!remote) return;
+      const current = sessionRef.current;
+      if ((remote.updatedAt || 0) > (current.metaUpdatedAt || 0)) {
+        const { updatedAt, updatedBy, ...fields } = remote;
+        onUpdate({ ...fields, metaUpdatedAt: updatedAt });
+      }
+    };
+    metaRef.on('value', metaHandler);
+
+    // Surveyor positions (excluding self)
+    const surveyorsRef = fbDb.ref(`${key}/surveyors`);
+    const surveyorsHandler = (snap) => {
+      const remote = snap.val() || {};
+      const others = {};
+      const myKey = fbKey(identity.name);
+      Object.entries(remote).forEach(([key, info]) => {
+        if (key !== myKey) others[info.displayName || key] = info;
+      });
+      setOtherSurveyors(others);
+    };
+    surveyorsRef.on('value', surveyorsHandler);
+
+    return () => {
+      connRef.off('value', connHandler);
+      eqRef.off('value', eqHandler);
+      obsRef.off('value', obsHandler);
+      metaRef.off('value', metaHandler);
+      surveyorsRef.off('value', surveyorsHandler);
+    };
+  }, [projectId, sessionId]);
+
+  function pushEquipment(item) {
+    if (!fbDb) return;
+    const key = syncKey(projectId, sessionId);
+    fbDb.ref(`${key}/equipment/${item.id}`).set({ ...item, updatedAt: Date.now() }).catch(()=>{});
+  }
+  function removeEquipment(id) {
+    if (!fbDb) return;
+    const key = syncKey(projectId, sessionId);
+    fbDb.ref(`${key}/equipment/${id}`).remove().catch(()=>{});
+  }
+  function pushObservation(item) {
+    if (!fbDb) return;
+    const key = syncKey(projectId, sessionId);
+    fbDb.ref(`${key}/observations/${item.id}`).set({ ...item, updatedAt: Date.now() }).catch(()=>{});
+  }
+  function removeObservation(id) {
+    if (!fbDb) return;
+    const key = syncKey(projectId, sessionId);
+    fbDb.ref(`${key}/observations/${id}`).remove().catch(()=>{});
+  }
+  function pushMeta(fields) {
+    if (!fbDb) return;
+    const key = syncKey(projectId, sessionId);
+    fbDb.ref(`${key}/meta`).set({ ...fields, updatedAt: Date.now(), updatedBy: identity.name }).catch(()=>{});
+  }
+  function pushSurveyorPosition(lat, lon) {
+    if (!fbDb) return;
+    const key = syncKey(projectId, sessionId);
+    fbDb.ref(`${key}/surveyors/${fbKey(identity.name)}`).set({ lat, lon, lastUpdate: Date.now(), isSuperuser: !!identity.isSuperuser, displayName: identity.name }).catch(()=>{});
+  }
+
+  return {
+    connected: !!fbDb && connected,
+    available: !!fbDb,
+    otherSurveyors,
+    pushEquipment, removeEquipment, pushObservation, removeObservation, pushMeta, pushSurveyorPosition
+  };
+}
+
+/* ============================================================
+   ICONS (minimal inline SVGs, no external icon lib needed)
+   ============================================================ */
+const Icon = ({ d, viewBox="0 0 24 24" }) => (
+  <svg viewBox={viewBox} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html: d}} />
+);
+const IconPlus = () => <Icon d='<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>' />;
+const IconBack = () => <Icon d='<polyline points="15 18 9 12 15 6"/>' />;
+const IconMapPin = () => <Icon d='<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>' />;
+const IconSettings = () => <Icon d='<circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.2 4.2l4.2 4.2m7.2 7.2l4.2 4.2M1 12h6m10 0h6M4.2 19.8l4.2-4.2m7.2-7.2l4.2-4.2"/>' />;
+const IconDownload = () => <Icon d='<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' />;
+const IconCloud = () => <Icon d='<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>' />;
+const IconCamera = () => <Icon d='<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>' />;
+const IconCrosshair = () => <Icon d='<circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/>' />;
+const IconTrash = () => <Icon d='<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>' />;
+const IconMic = () => <Icon d='<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>' />;
+const IconSquare = () => <Icon d='<rect x="4" y="4" width="16" height="16" rx="2"/>' />;
+const IconX = () => <Icon d='<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>' />;
+const IconUpload = () => <Icon d='<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>' />;
+const IconUser = () => <Icon d='<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' />;
+const IconLock = () => <Icon d='<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>' />;
+const IconQR = () => <Icon d='<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="14.01"/><line x1="14" y1="18" x2="14" y2="18.01"/><line x1="18" y1="14" x2="18" y2="14.01"/><line x1="18" y1="18" x2="18" y2="18.01"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/>' />;
+const IconCopy = () => <Icon d='<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>' />;
+
+/* ============================================================
+   ROOT APP
+   ============================================================ */
+function App() {
+  const [data, setData] = useState(loadData);
+  const [identity, setIdentity] = useState(loadIdentity);
+  const [showIdentityModal, setShowIdentityModal] = useState(false);
+  const [view, setView] = useState(() => {
+    // Check for ?join=<projectId>.<sessionId> deep link
+    const params = new URLSearchParams(window.location.search);
+    const join = params.get('join');
+    if (join && join.includes('.')) {
+      const [projectId, sessionId] = join.split('.');
+      return { screen: 'session', projectId, sessionId, viaJoin: true };
+    }
+    return { screen: 'projects' };
+  });
+  useEffect(() => saveData(data), [data]);
+  const projects = data.projects || [];
+
+  function addProject(name) {
+    setData(d => ({ ...d, projects: [...d.projects, { id: uid(), name, createdAt: Date.now(), archived: false, sessions: [] }] }));
+  }
+  function setProjectArchived(projectId, archived) {
+    setData(d => ({ ...d, projects: d.projects.map(p => p.id===projectId ? {...p, archived} : p) }));
+  }
+  function deleteProject(projectId) {
+    setData(d => ({ ...d, projects: d.projects.filter(p => p.id !== projectId) }));
+  }
+  function addSession(projectId, s) {
+    setData(d => ({ ...d, projects: d.projects.map(p => p.id===projectId ? {...p, sessions:[...(p.sessions||[]), s]} : p) }));
+  }
+  function updateSession(projectId, sessionId, updates) {
+    setData(d => ({ ...d, projects: d.projects.map(p => p.id!==projectId ? p : {...p, sessions: p.sessions.map(s => s.id===sessionId ? {...s, ...updates} : s)}) }));
+  }
+  function getSession(projectId, sessionId) {
+    const p = projects.find(p=>p.id===projectId);
+    return p ? p.sessions.find(s=>s.id===sessionId) : null;
+  }
+  function handleSaveIdentity(newIdentity) {
+    setIdentity(newIdentity);
+    saveIdentity(newIdentity);
+    setShowIdentityModal(false);
+  }
+
+  // First-run: no identity set yet — block until name is entered
+  if (!identity) {
+    return <IdentityModal current={null} onSave={handleSaveIdentity} />;
+  }
+
+  const switchUserModal = showIdentityModal && (
+    <IdentityModal current={identity} onSave={handleSaveIdentity} onClose={()=>setShowIdentityModal(false)} />
+  );
+
+  if (view.screen === 'projects') {
+    return <React.Fragment>
+      <ProjectsScreen projects={projects} identity={identity} onSwitchUser={()=>setShowIdentityModal(true)}
+        onAddProject={addProject} onOpenProject={id=>setView({screen:'sessions', projectId:id})}
+        onSetArchived={setProjectArchived} onDeleteProject={deleteProject} />
+      {switchUserModal}
+    </React.Fragment>;
+  }
+  if (view.screen === 'sessions') {
+    const project = projects.find(p=>p.id===view.projectId);
+    return <React.Fragment>
+      <SessionsScreen project={project} identity={identity} onSwitchUser={()=>setShowIdentityModal(true)} onBack={()=>setView({screen:'projects'})}
+        onAddSession={s=>addSession(project.id, s)}
+        onOpenSession={sid=>setView({screen:'session', projectId:project.id, sessionId:sid})} />
+      {switchUserModal}
+    </React.Fragment>;
+  }
+  if (view.screen === 'session') {
+    const project = projects.find(p=>p.id===view.projectId);
+    const session = getSession(view.projectId, view.sessionId);
+    if (!project || !session) {
+      return <React.Fragment>
+        <div className="app-shell">
+          <Header title="Bat Survey" subtitle="Session not found" identity={identity} onSwitchUser={()=>setShowIdentityModal(true)} />
+          <div className="content">
+            <EmptyState icon={<IconMapPin/>} title="Session not found"
+              text="This link doesn't match a session on this device yet. If you're a surveyor joining via a shared link, make sure the coordinator's data has synced to this device." />
+            <button className="btn btn-secondary btn-full" onClick={()=>setView({screen:'projects'})} style={{marginTop:12}}>Go to projects</button>
+          </div>
+        </div>
+        {switchUserModal}
+      </React.Fragment>;
+    }
+    return <React.Fragment>
+      <SessionScreen project={project} session={session} identity={identity} onSwitchUser={()=>setShowIdentityModal(true)}
+        onBack={view.viaJoin ? null : ()=>setView({screen:'sessions', projectId:project.id})}
+        onUpdate={u=>updateSession(project.id, session.id, u)} />
+      {switchUserModal}
+    </React.Fragment>;
+  }
+  return null;
+}
+
+/* ============================================================
+   PROJECTS SCREEN
+   ============================================================ */
+function ProjectsScreen({ projects, identity, onSwitchUser, onAddProject, onOpenProject, onSetArchived, onDeleteProject }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [name, setName] = useState('');
+  const [filter, setFilter] = useState('active'); // active | archived
+  const [manageId, setManageId] = useState(null);
+
+  const filtered = projects.filter(p => filter === 'archived' ? !!p.archived : !p.archived);
+  const archivedCount = projects.filter(p => p.archived).length;
+
+  return (
+    <div className="app-shell">
+      <Header title="Bat Survey" subtitle="Projects" identity={identity} onSwitchUser={onSwitchUser} />
+      <div className="content">
+        {identity.isSuperuser && (
+          <div className="segmented" style={{marginBottom:12}}>
+            <button className={`segment ${filter==='active'?'segment-active':''}`} onClick={()=>setFilter('active')}>Active</button>
+            <button className={`segment ${filter==='archived'?'segment-active':''}`} onClick={()=>setFilter('archived')}>Archived{archivedCount > 0 ? ` (${archivedCount})` : ''}</button>
+          </div>
+        )}
+        {filtered.length === 0 && (
+          <EmptyState icon={<IconMapPin />} title={filter === 'archived' ? 'No archived projects' : 'No projects yet'}
+            text={filter === 'archived'
+              ? "Projects you archive will appear here, ready to back up and delete."
+              : identity.isSuperuser
+                ? "Create a project for each site you work on, e.g. 'Abbey Works'. Survey sessions live inside projects."
+                : "No projects are available on this device yet. Ask your coordinator for a session link."} />
+        )}
+        <div className="card-list">
+          {filtered.map(p => (
+            <div key={p.id} className="card-with-actions">
+              <button className="card card-tap" onClick={()=>onOpenProject(p.id)} style={{flex:1}}>
+                <div className="card-main">
+                  <div className="card-title">{p.name}</div>
+                  <div className="card-sub">{(p.sessions||[]).length} session{(p.sessions||[]).length===1?'':'s'}</div>
+                </div>
+                <span className="card-chevron" style={{width:20, height:20}}><Icon d='<polyline points="9 18 15 12 9 6"/>' /></span>
+              </button>
+              {identity.isSuperuser && (
+                <button className="btn btn-icon btn-small" onClick={()=>setManageId(p.id)} aria-label="Manage project">
+                  <IconSettings/>
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      {showAdd && (
+        <Modal title="New project" onClose={()=>setShowAdd(false)}>
+          <label className="field-label">Project name</label>
+          <input className="text-input" placeholder="e.g. Abbey Works" value={name} onChange={e=>setName(e.target.value)} autoFocus />
+          <div className="modal-actions">
+            <button className="btn btn-secondary" onClick={()=>setShowAdd(false)}>Cancel</button>
+            <button className="btn btn-primary" disabled={!name.trim()} onClick={()=>{ onAddProject(name.trim()); setName(''); setShowAdd(false); }}>Create</button>
+          </div>
+        </Modal>
+      )}
+      {manageId && (() => {
+        const p = projects.find(pr => pr.id === manageId);
+        if (!p) return null;
+        return (
+          <Modal title={p.name} onClose={()=>setManageId(null)}>
+            <p className="modal-text" style={{marginBottom:14}}>
+              {p.archived
+                ? "This project is archived. You can unarchive it, or delete it permanently once you've backed up its data."
+                : "Archiving hides a completed project from the active list without deleting anything. You can unarchive it anytime."}
+            </p>
+            {!p.archived ? (
+              <button className="btn btn-secondary btn-full" onClick={()=>{ onSetArchived(p.id, true); setManageId(null); }}>Archive project</button>
+            ) : (
+              <React.Fragment>
+                <button className="btn btn-secondary btn-full" onClick={()=>{ onSetArchived(p.id, false); setManageId(null); }} style={{marginBottom:10}}>Unarchive</button>
+                <button className="btn btn-danger btn-full" onClick={()=>{
+                  if (confirm(`Permanently delete "${p.name}" and all its sessions, equipment and observations?\n\nThis cannot be undone. Make sure you've exported this data first.`)) {
+                    onDeleteProject(p.id);
+                    setManageId(null);
+                  }
+                }}>
+                  <IconTrash/> Delete permanently
+                </button>
+              </React.Fragment>
+            )}
+          </Modal>
+        );
+      })()}
+      {identity.isSuperuser && filter === 'active' && (
+        <button className="fab" onClick={()=>setShowAdd(true)} aria-label="New project"><span style={{width:26,height:26}}><IconPlus/></span></button>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   SESSIONS SCREEN
+   ============================================================ */
+function SessionsScreen({ project, identity, onSwitchUser, onBack, onAddSession, onOpenSession }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [filter, setFilter] = useState('active'); // active | closed
+  if (!project) return null;
+  const sessions = project.sessions || [];
+  const filtered = sessions.filter(s => filter === 'closed' ? s.status === 'closed' : s.status !== 'closed');
+  const closedCount = sessions.filter(s => s.status === 'closed').length;
+
+  function createSession() {
+    const s = {
+      id: uid(), label: `Survey ${sessions.length+1}`, date: todayStr(), status: 'active',
+      surveyStart:'', surveyEnd:'', sunset:'', weather:{mode:'auto',temp:'',wind:'',cloud:'',precip:''},
+      sitePhoto:null, notes:'', equipment:[], observations:[], surveyors:[], referenceLayers:[], createdAt: Date.now()
+    };
+    onAddSession(s);
+    onOpenSession(s.id);
+  }
+  return (
+    <div className="app-shell">
+      <Header title={project.name} subtitle="Survey sessions" onBack={onBack} identity={identity} onSwitchUser={onSwitchUser} />
+      <div className="content">
+        <div className="segmented" style={{marginBottom:12}}>
+          <button className={`segment ${filter==='active'?'segment-active':''}`} onClick={()=>setFilter('active')}>Active</button>
+          <button className={`segment ${filter==='closed'?'segment-active':''}`} onClick={()=>setFilter('closed')}>Closed{closedCount > 0 ? ` (${closedCount})` : ''}</button>
+        </div>
+        {filtered.length === 0 && (
+          <EmptyState icon={<IconSettings/>} title={filter === 'closed' ? 'No closed sessions' : 'No active sessions'}
+            text={filter === 'closed'
+              ? "Sessions you close will appear here."
+              : identity.isSuperuser
+                ? "Each survey session is one night's standalone data set: setup, equipment map, observations, and export."
+                : "No sessions are available yet. Ask your coordinator for a session link."} />
+        )}
+        <div className="card-list">
+          {filtered.map(s => (
+            <button key={s.id} className="card card-tap" onClick={()=>onOpenSession(s.id)}>
+              <div className="card-main">
+                <div className="card-title">{s.label}</div>
+                <div className="card-sub">{s.date} · {(s.observations||[]).length} observation{(s.observations||[]).length===1?'':'s'}</div>
+              </div>
+              <StatusPill status={s.status} />
+            </button>
+          ))}
+        </div>
+      </div>
+      {showAdd && (
+        <Modal title="New survey session" onClose={()=>setShowAdd(false)}>
+          <p className="modal-text">A new session will be created for today, ready for setup.</p>
+          <div className="modal-actions">
+            <button className="btn btn-secondary" onClick={()=>setShowAdd(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={()=>{ createSession(); setShowAdd(false); }}>Create session</button>
+          </div>
+        </Modal>
+      )}
+      {identity.isSuperuser && filter === 'active' && (
+        <button className="fab" onClick={()=>setShowAdd(true)} aria-label="New session"><span style={{width:26,height:26}}><IconPlus/></span></button>
+      )}
+    </div>
+  );
+}
+
+function StatusPill({ status }) {
+  const map = { setup:['Setup','pill-setup'], active:['Active','pill-active'], closed:['Closed','pill-closed'] };
+  const [label, cls] = map[status] || map.setup;
+  return <span className={`pill ${cls}`}>{label}</span>;
+}
+
+/* ============================================================
+   SESSION SCREEN (tabs)
+   ============================================================ */
+function SessionScreen({ project, session, identity, onSwitchUser, onBack, onUpdate }) {
+  const [tab, setTab] = useState(onBack ? 'setup' : 'map');
+  const sync = useFirebaseSync(project.id, session.id, session, onUpdate, identity);
+  if (!session) return null;
+  return (
+    <div className="app-shell">
+      <Header title={session.label} subtitle={project.name} onBack={onBack} identity={identity} onSwitchUser={onSwitchUser} />
+      {sync.available && (
+        <div className={`sync-indicator ${sync.connected ? 'sync-on' : 'sync-off'}`}>
+          <span className="sync-dot" /> {sync.connected ? 'Synced with team' : 'Offline — changes saved locally'}
+        </div>
+      )}
+      <div className="tab-bar">
+        <TabButton active={tab==='setup'} onClick={()=>setTab('setup')} icon={<IconSettings/>} label="Setup" />
+        <TabButton active={tab==='map'} onClick={()=>setTab('map')} icon={<IconMapPin/>} label="Map" />
+        <TabButton active={tab==='observe'} onClick={()=>setTab('observe')} icon={<IconPlus/>} label="Observe" />
+        <TabButton active={tab==='export'} onClick={()=>setTab('export')} icon={<IconDownload/>} label="Export" />
+      </div>
+      <div className="content">
+        {tab==='setup' && <SetupTab session={session} onUpdate={onUpdate} project={project} identity={identity} sync={sync} />}
+        {tab==='map' && <MapTab session={session} onUpdate={onUpdate} identity={identity} sync={sync} />}
+        {tab==='observe' && <ObserveTab session={session} onUpdate={onUpdate} identity={identity} sync={sync} />}
+        {tab==='export' && (identity.isSuperuser
+          ? <PlaceholderTab label="Export: CSV + GeoJSON + PDF, email via EmailJS — built in final module" />
+          : <LockedTab label="Export is available to coordinators only." />)}
+      </div>
+    </div>
+  );
+}
+
+function LockedTab({ label }) {
+  return (
+    <div className="placeholder-tab">
+      <span style={{width:32, height:32, display:'block', margin:'0 auto 12px', color:'var(--text-faint)'}}><IconLock/></span>
+      <p>{label}</p>
+    </div>
+  );
+}
+
+function PlaceholderTab({ label }) {
+  return (
+    <div className="placeholder-tab">
+      <p>{label}</p>
+      <p className="muted-small">Not built yet in this test version.</p>
+    </div>
+  );
+}
+
+function TabButton({ active, onClick, icon, label }) {
+  return (
+    <button className={`tab-btn ${active?'tab-btn-active':''}`} onClick={onClick}>
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+/* ============================================================
+   SETUP TAB
+   ============================================================ */
+function SetupTab({ session, onUpdate, project, identity, sync }) {
+  const [gpsStatus, setGpsStatus] = useState('idle');
+  const [weatherStatus, setWeatherStatus] = useState('idle');
+  const fileInputRef = useRef(null);
+  const readOnly = !identity.isSuperuser;
+
+  // Debounced push of setup/meta fields to Firebase (excludes large local-only
+  // fields like sitePhoto and referenceLayers, and derived arrays)
+  const metaPushTimerRef = useRef(null);
+  useEffect(() => {
+    if (!sync || readOnly) return;
+    if (metaPushTimerRef.current) clearTimeout(metaPushTimerRef.current);
+    metaPushTimerRef.current = setTimeout(() => {
+      const {
+        equipment, observations, surveyors, referenceLayers, sitePhoto,
+        id, createdAt, metaUpdatedAt, ...meta
+      } = session;
+      const updatedAt = Date.now();
+      sync.pushMeta(meta);
+      onUpdate({ metaUpdatedAt: updatedAt });
+    }, 1500);
+    return () => clearTimeout(metaPushTimerRef.current);
+  }, [JSON.stringify({ ...session, sitePhoto: undefined, equipment: undefined, observations: undefined, referenceLayers: undefined })]);
+
+  function getLocationAndSunset() {
+    setGpsStatus('loading');
+    if (!navigator.geolocation) { setGpsStatus('error'); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude, longitude } = pos.coords;
+        const sunset = calcSunset(latitude, longitude, session.date);
+        onUpdate({ sunset: sunset || session.sunset, siteLat: latitude, siteLon: longitude });
+        setGpsStatus('done');
+      },
+      () => setGpsStatus('error'),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  function fetchWeather() {
+    setWeatherStatus('loading');
+    const weather = session.weather || { mode:'auto', temp:'', wind:'', cloud:'', precip:'' };
+
+    function fetchForCoords(lat, lon) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,cloud_cover,wind_speed_10m&wind_speed_unit=mph`;
+      fetch(url)
+        .then(r => r.json())
+        .then(data => {
+          const c = data.current;
+          if (!c) throw new Error('No data');
+          onUpdate({ weather: {
+            ...weather,
+            mode: 'auto',
+            temp: String(Math.round(c.temperature_2m)),
+            wind: `${Math.round(c.wind_speed_10m)} mph`,
+            cloud: String(Math.round(c.cloud_cover)),
+            precip: c.precipitation > 0 ? `${c.precipitation} mm` : 'None'
+          }});
+          setWeatherStatus('done');
+        })
+        .catch(() => setWeatherStatus('error'));
+    }
+
+    if (session.siteLat && session.siteLon) {
+      fetchForCoords(session.siteLat, session.siteLon);
+    } else if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => fetchForCoords(pos.coords.latitude, pos.coords.longitude),
+        () => setWeatherStatus('error'),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    } else {
+      setWeatherStatus('error');
+    }
+  }
+
+  function handlePhoto(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onUpdate({ sitePhoto: reader.result });
+    reader.readAsDataURL(file);
+  }
+  const weather = session.weather || { mode:'auto', temp:'', wind:'', cloud:'', precip:'' };
+
+  return (
+    <div className="setup-tab">
+      {readOnly && (
+        <div className="map-banner" style={{marginBottom:12}}>
+          <span style={{display:'inline-flex', alignItems:'center', gap:6}}><span style={{width:14,height:14}}><IconLock/></span> View only — coordinators can edit session setup.</span>
+        </div>
+      )}
+      {identity.isSuperuser && <SurveyorAccessSection project={project} session={session} />}
+      <fieldset disabled={readOnly} style={{border:'none', padding:0, margin:0}}>
+      <Section title="Session name">
+        <FieldRow label="Label">
+          <input className="text-input" placeholder="e.g. Survey 1, Pre-construction baseline" value={session.label} onChange={e=>onUpdate({label:e.target.value})} />
+          <div className="field-hint">Shown in the session list and at the top of the screen — rename to add detail (e.g. dates, phase, equipment used).</div>
+        </FieldRow>
+      </Section>
+
+      <Section title="Date & timing">
+        <FieldRow label="Date">
+          <input type="date" className="text-input" value={session.date} onChange={e=>onUpdate({date:e.target.value})} />
+        </FieldRow>
+        <FieldRow label="Sunset time">
+          <div className="inline-field">
+            <input type="time" className="text-input" value={session.sunset||''} onChange={e=>onUpdate({sunset:e.target.value})} />
+            <button className="btn btn-icon" onClick={getLocationAndSunset} title="Calculate from current location">
+              {gpsStatus==='loading' ? <div className="spinner"/> : <IconCrosshair/>}
+            </button>
+          </div>
+          {gpsStatus==='error' && <div className="field-hint field-hint-error">Couldn't get location — enter sunset manually.</div>}
+          {gpsStatus==='done' && <div className="field-hint">Calculated from your current location.</div>}
+        </FieldRow>
+        <FieldRow label="Survey start">
+          <div className="inline-field">
+            <input type="time" className="text-input" value={session.surveyStart||''} onChange={e=>onUpdate({surveyStart:e.target.value})} />
+            <button className="btn btn-secondary btn-small" onClick={()=>onUpdate({surveyStart:nowTimeStr()})}>Now</button>
+          </div>
+        </FieldRow>
+        <FieldRow label="Survey end">
+          <div className="inline-field">
+            <input type="time" className="text-input" value={session.surveyEnd||''} onChange={e=>onUpdate({surveyEnd:e.target.value})} />
+            <button className="btn btn-secondary btn-small" onClick={()=>onUpdate({surveyEnd:nowTimeStr()})}>Now</button>
+          </div>
+        </FieldRow>
+      </Section>
+
+      <Section title="Weather conditions">
+        <div className="segmented">
+          <button className={`segment ${weather.mode==='auto'?'segment-active':''}`} onClick={()=>onUpdate({weather:{...weather, mode:'auto'}})}>
+            <IconCloud/> Auto
+          </button>
+          <button className={`segment ${weather.mode==='manual'?'segment-active':''}`} onClick={()=>onUpdate({weather:{...weather, mode:'manual'}})}>
+            Manual
+          </button>
+        </div>
+        {weather.mode==='auto' && (
+          <div style={{marginTop:8}}>
+            <button className="btn btn-secondary btn-full btn-small" onClick={fetchWeather} disabled={weatherStatus==='loading'}>
+              {weatherStatus==='loading' ? <div className="spinner"/> : <IconCloud/>}
+              {weatherStatus==='loading' ? 'Fetching...' : 'Fetch current weather'}
+            </button>
+            {weatherStatus==='done' && <div className="field-hint">Updated from current conditions at this location. Fields below remain editable.</div>}
+            {weatherStatus==='error' && <div className="field-hint field-hint-error">Couldn't fetch weather — check connection, or enter manually below.</div>}
+            {weatherStatus==='idle' && <div className="field-hint">Needs a network connection. Fields below remain editable as fallback.</div>}
+          </div>
+        )}
+        <FieldRow label="Temperature (°C)">
+          <input type="number" className="text-input" placeholder="e.g. 14" value={weather.temp} onChange={e=>onUpdate({weather:{...weather, temp:e.target.value}})} />
+        </FieldRow>
+        <FieldRow label="Wind (Beaufort or mph)">
+          <input className="text-input" placeholder="e.g. Light breeze / 8mph" value={weather.wind} onChange={e=>onUpdate({weather:{...weather, wind:e.target.value}})} />
+        </FieldRow>
+        <FieldRow label="Cloud cover (%)">
+          <input type="number" className="text-input" placeholder="e.g. 25" value={weather.cloud} onChange={e=>onUpdate({weather:{...weather, cloud:e.target.value}})} />
+        </FieldRow>
+        <FieldRow label="Precipitation">
+          <input className="text-input" placeholder="e.g. None / Light rain" value={weather.precip} onChange={e=>onUpdate({weather:{...weather, precip:e.target.value}})} />
+        </FieldRow>
+      </Section>
+
+      <Section title="Site photo">
+        {session.sitePhoto ? (
+          <div className="photo-preview">
+            <img src={session.sitePhoto} alt="Site" />
+            <button className="btn btn-secondary btn-small" onClick={()=>onUpdate({sitePhoto:null})}>Remove</button>
+          </div>
+        ) : (
+          <button className="btn btn-secondary btn-full" onClick={()=>fileInputRef.current && fileInputRef.current.click()}>
+            <IconCamera/> Add photo
+          </button>
+        )}
+        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{display:'none'}} onChange={handlePhoto} />
+      </Section>
+
+      <Section title="Session notes">
+        <textarea className="text-input textarea" placeholder="General notes for this session..." value={session.notes||''} onChange={e=>onUpdate({notes:e.target.value})} rows={3} />
+      </Section>
+      </fieldset>
+
+      {identity.isSuperuser && <CloseSessionSection session={session} onUpdate={onUpdate} />}
+    </div>
+  );
+}
+
+function SurveyorAccessSection({ project, session }) {
+  const qrRef = useRef(null);
+  const [copied, setCopied] = useState(false);
+  const joinUrl = `${window.location.origin}${window.location.pathname}?join=${project.id}.${session.id}`;
+
+  useEffect(() => {
+    if (!qrRef.current || !window.QRCode) return;
+    qrRef.current.innerHTML = '';
+    new window.QRCode(qrRef.current, {
+      text: joinUrl,
+      width: 160,
+      height: 160,
+      colorDark: '#14171a',
+      colorLight: '#ffffff',
+      correctLevel: window.QRCode.CorrectLevel.M
+    });
+  }, [joinUrl]);
+
+  function copyLink() {
+    navigator.clipboard?.writeText(joinUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  }
+
+  return (
+    <Section title="Surveyor access">
+      <div className="field-hint" style={{marginBottom:10}}>
+        Share this QR code or link with surveyors. Opening it takes them straight to this session's Map and Observe tabs — they'll be asked for their name on first use.
+      </div>
+      <div style={{display:'flex', justifyContent:'center', background:'#fff', borderRadius:8, padding:12, marginBottom:10}}>
+        <div ref={qrRef} />
+      </div>
+      <div className="inline-field">
+        <input className="text-input" readOnly value={joinUrl} style={{fontFamily:'var(--font-mono)', fontSize:12}} onClick={e=>e.target.select()} />
+        <button className="btn btn-secondary btn-small" onClick={copyLink}><IconCopy/> {copied ? 'Copied' : 'Copy'}</button>
+      </div>
+    </Section>
+  );
+}
+
+function CloseSessionSection({ session, onUpdate }) {
+  const [showCloseForm, setShowCloseForm] = useState(false);
+  const weatherEnd = session.weatherEnd || { temp:'', wind:'', cloud:'', precip:'' };
+
+  if (session.status === 'closed') {
+    return (
+      <Section title="Session status">
+        <div className="field-hint" style={{marginBottom:10}}>This session is closed. Data is preserved — reopen if you need to add or correct anything.</div>
+        <button className="btn btn-secondary btn-full" onClick={()=>onUpdate({status:'active'})}>Reopen session</button>
+      </Section>
+    );
+  }
+
+  function fetchEndWeather() {
+    function fetchForCoords(lat, lon) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,cloud_cover,wind_speed_10m&wind_speed_unit=mph`;
+      fetch(url)
+        .then(r => r.json())
+        .then(data => {
+          const c = data.current;
+          if (!c) throw new Error('No data');
+          onUpdate({ weatherEnd: {
+            temp: String(Math.round(c.temperature_2m)),
+            wind: `${Math.round(c.wind_speed_10m)} mph`,
+            cloud: String(Math.round(c.cloud_cover)),
+            precip: c.precipitation > 0 ? `${c.precipitation} mm` : 'None'
+          }});
+        })
+        .catch(() => alert('Could not fetch weather — enter manually below.'));
+    }
+    if (session.siteLat && session.siteLon) {
+      fetchForCoords(session.siteLat, session.siteLon);
+    } else if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => fetchForCoords(pos.coords.latitude, pos.coords.longitude),
+        () => alert('Could not get location for weather — enter manually below.'),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  }
+
+  return (
+    <Section title="Close session">
+      <div className="field-hint" style={{marginBottom:10}}>
+        Closing a session marks it as finished and records end-of-survey weather. You can reopen it later if needed — data is never deleted.
+      </div>
+      {!showCloseForm ? (
+        <button className="btn btn-primary btn-full" onClick={()=>setShowCloseForm(true)}>Close session</button>
+      ) : (
+        <div>
+          <div className="field-label" style={{marginBottom:8}}>End-of-survey weather</div>
+          <button className="btn btn-secondary btn-full btn-small" onClick={fetchEndWeather} style={{marginBottom:10}}>
+            <IconCloud/> Fetch current weather
+          </button>
+          <FieldRow label="Temperature (°C)">
+            <input type="number" className="text-input" placeholder="e.g. 11" value={weatherEnd.temp} onChange={e=>onUpdate({weatherEnd:{...weatherEnd, temp:e.target.value}})} />
+          </FieldRow>
+          <FieldRow label="Wind (Beaufort or mph)">
+            <input className="text-input" placeholder="e.g. Calm" value={weatherEnd.wind} onChange={e=>onUpdate({weatherEnd:{...weatherEnd, wind:e.target.value}})} />
+          </FieldRow>
+          <FieldRow label="Cloud cover (%)">
+            <input type="number" className="text-input" placeholder="e.g. 60" value={weatherEnd.cloud} onChange={e=>onUpdate({weatherEnd:{...weatherEnd, cloud:e.target.value}})} />
+          </FieldRow>
+          <FieldRow label="Precipitation">
+            <input className="text-input" placeholder="e.g. None" value={weatherEnd.precip} onChange={e=>onUpdate({weatherEnd:{...weatherEnd, precip:e.target.value}})} />
+          </FieldRow>
+          <div className="modal-actions" style={{marginTop:14}}>
+            <button className="btn btn-secondary" onClick={()=>setShowCloseForm(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={()=>{ onUpdate({status:'closed'}); setShowCloseForm(false); }}>Confirm close</button>
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/* ============================================================
+   MAP TAB
+   ============================================================ */
+function MapTab({ session, onUpdate, identity, sync }) {
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const layersRef = useRef({ equipment: [], observations: [], reference: [], surveyor: null, otherSurveyors: {} });
+  const [gpsPos, setGpsPos] = useState(null);
+  const [editingEquipment, setEditingEquipment] = useState(null);
+  const [placementMode, setPlacementMode] = useState(false);
+  const [pendingCoords, setPendingCoords] = useState(null);
+  const placementModeRef = useRef(false);
+  const fileRef = useRef(null);
+
+  const equipment = session.equipment || [];
+  const observations = session.observations || [];
+  const referenceLayers = session.referenceLayers || [];
+
+  useEffect(() => { placementModeRef.current = placementMode; }, [placementMode]);
+
+  useEffect(() => {
+    if (mapInstanceRef.current || !mapRef.current) return;
+    const L = window.L;
+    if (!L) return;
+    const initialCenter = (session.siteLat && session.siteLon) ? [session.siteLat, session.siteLon] : [51.5, -0.1];
+    const map = L.map(mapRef.current, { zoomControl: true }).setView(initialCenter, 17);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, attribution: '© OpenStreetMap' }).addTo(map);
+    map.on('click', (e) => {
+      if (placementModeRef.current) setPendingCoords([e.latlng.lat, e.latlng.lng]);
+    });
+    mapInstanceRef.current = map;
+    setTimeout(() => map.invalidateSize(), 100);
+    return () => { map.remove(); mapInstanceRef.current = null; };
+  }, []);
+
+  const hasAutoCenteredRef = useRef(false);
+  const lastPushedPosRef = useRef(null);
+  const lastPushTimeRef = useRef(0);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      pos => {
+        const coords = [pos.coords.latitude, pos.coords.longitude];
+        setGpsPos(coords);
+        if (!hasAutoCenteredRef.current && mapInstanceRef.current && !(session.siteLat && session.siteLon)) {
+          mapInstanceRef.current.setView(coords, 18);
+          hasAutoCenteredRef.current = true;
+        }
+        // Throttled push to Firebase for "near real-time" surveyor position
+        // (H&S visibility): every 20s, or immediately if moved >10m
+        if (sync) {
+          const now = Date.now();
+          const last = lastPushedPosRef.current;
+          const movedFar = last && haversine(last[0], last[1], coords[0], coords[1]) > 10;
+          if (!last || movedFar || (now - lastPushTimeRef.current) > 20000) {
+            sync.pushSurveyorPosition(coords[0], coords[1]);
+            lastPushedPosRef.current = coords;
+            lastPushTimeRef.current = now;
+          }
+        }
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current, L = window.L;
+    if (!map || !L || !gpsPos) return;
+    if (layersRef.current.surveyor) {
+      layersRef.current.surveyor.setLatLng(gpsPos);
+    } else {
+      const icon = L.divIcon({ className:'', html:'<div class="surveyor-dot"></div>', iconSize:[20,20], iconAnchor:[10,10] });
+      layersRef.current.surveyor = L.marker(gpsPos, { icon, zIndexOffset: 1000 }).addTo(map);
+    }
+  }, [gpsPos]);
+
+  // Render other surveyors' last-known positions (from sync)
+  useEffect(() => {
+    const map = mapInstanceRef.current, L = window.L;
+    if (!map || !L || !sync) return;
+    const others = sync.otherSurveyors || {};
+    const existing = layersRef.current.otherSurveyors || {};
+
+    // Remove markers for surveyors no longer present
+    Object.keys(existing).forEach(name => {
+      if (!others[name]) {
+        map.removeLayer(existing[name]);
+        delete existing[name];
+      }
+    });
+
+    Object.entries(others).forEach(([name, info]) => {
+      if (info.lat == null || info.lon == null) return;
+      const pos = [info.lat, info.lon];
+      const ageMin = Math.round((Date.now() - (info.lastUpdate || 0)) / 60000);
+      const ageLabel = ageMin < 1 ? 'just now' : `${ageMin}m ago`;
+      if (existing[name]) {
+        existing[name].setLatLng(pos);
+        existing[name].setTooltipContent(`${name} · ${ageLabel}`);
+      } else {
+        const icon = L.divIcon({
+          className: '',
+          html: `<div class="surveyor-dot surveyor-dot-other"><span class="surveyor-label">${name}</span></div>`,
+          iconSize: [20, 20], iconAnchor: [10, 10]
+        });
+        const marker = L.marker(pos, { icon, zIndexOffset: 900 }).addTo(map);
+        marker.bindTooltip(`${name} · ${ageLabel}`, { permanent: false });
+        existing[name] = marker;
+      }
+    });
+    layersRef.current.otherSurveyors = existing;
+  }, [sync && sync.otherSurveyors]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current, L = window.L;
+    if (!map || !L) return;
+    layersRef.current.equipment.forEach(l => map.removeLayer(l));
+    layersRef.current.equipment = [];
+    equipment.forEach(eq => {
+      const kitDef = KIT_TYPES[eq.kit] || KIT_TYPES.OTHER;
+      const color = kitDef.color;
+      if (kitDef.shape === 'wedge' && eq.fov && eq.radius) {
+        const wedge = wedgePolygon(eq.lat, eq.lon, eq.bearing||0, eq.fov, eq.radius);
+        const poly = L.polygon(wedge, { color, weight:1.5, fillColor:color, fillOpacity:0.22, opacity:0.7 }).addTo(map);
+        poly.on('click', () => setEditingEquipment(eq));
+        layersRef.current.equipment.push(poly);
+      }
+      const markerHtml = kitDef.shape === 'square'
+        ? `<div class="eq-marker eq-marker-square" style="background:${color}"></div>`
+        : `<div class="eq-marker eq-marker-circle" style="background:${color}"></div>`;
+      const icon = L.divIcon({ className:'', html: markerHtml, iconSize:[18,18], iconAnchor:[9,9] });
+      const marker = L.marker([eq.lat, eq.lon], { icon, zIndexOffset: 500 }).addTo(map);
+      marker.bindTooltip(eq.unitId || kitDef.label, { permanent: false });
+      marker.on('click', () => setEditingEquipment(eq));
+      layersRef.current.equipment.push(marker);
+    });
+  }, [equipment]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current, L = window.L;
+    if (!map || !L) return;
+    layersRef.current.observations.forEach(l => map.removeLayer(l));
+    layersRef.current.observations = [];
+    observations.forEach(obs => {
+      if (obs.lat == null || obs.lon == null) return;
+      const color = ACTIVITY_COLORS[obs.activity] || ACTIVITY_COLORS.unknown;
+      const isEmergence = obs.activity === 'emergence';
+      const markerHtml = isEmergence
+        ? `<div class="obs-marker-star" style="background:${color}"></div>`
+        : `<div class="obs-marker" style="background:${color}"></div>`;
+      const iconSize = isEmergence ? [18,18] : [14,14];
+      const iconAnchor = isEmergence ? [9,9] : [7,7];
+      const icon = L.divIcon({ className:'', html: markerHtml, iconSize, iconAnchor });
+      const marker = L.marker([obs.lat, obs.lon], { icon, zIndexOffset: 800 }).addTo(map);
+      marker.bindTooltip(`${obs.species} — ${obs.time}`, { permanent: false });
+      layersRef.current.observations.push(marker);
+    });
+  }, [observations]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current, L = window.L;
+    if (!map || !L) return;
+    layersRef.current.reference.forEach(l => map.removeLayer(l));
+    layersRef.current.reference = [];
+    referenceLayers.forEach(layer => {
+      try {
+        const gj = L.geoJSON(layer.data, {
+          style: { color:'#5BA3D0', weight:1.5, fillOpacity:0.05, dashArray:'4,4' },
+          pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius:4, color:'#5BA3D0', weight:1 })
+        }).addTo(map);
+        gj.eachLayer(l => {
+          const props = (l.feature && l.feature.properties) || {};
+          const label = props.label || props.name || props.building || props.id || '';
+          if (label) l.bindTooltip(String(label), { permanent: false });
+        });
+        layersRef.current.reference.push(gj);
+      } catch (e) { console.error('Failed to render reference layer', e); }
+    });
+  }, [referenceLayers]);
+
+  function centerOnGPS() {
+    if (gpsPos && mapInstanceRef.current) mapInstanceRef.current.setView(gpsPos, mapInstanceRef.current.getZoom());
+  }
+  function addEquipmentAt(coords) {
+    setPendingCoords(coords);
+    setPlacementMode(false);
+  }
+  function saveEquipment(eq) {
+    const exists = equipment.find(e => e.id === eq.id);
+    const stamped = exists
+      ? { ...eq, lastModifiedBy: identity.name }
+      : { ...eq, addedBy: identity.name, lastModifiedBy: identity.name };
+    const updated = exists ? equipment.map(e => e.id===eq.id ? stamped : e) : [...equipment, stamped];
+    onUpdate({ equipment: updated });
+    setEditingEquipment(null);
+    setPendingCoords(null);
+    if (sync) {
+      const { photo, ...syncable } = stamped; // photo stays local-only
+      sync.pushEquipment(syncable);
+    }
+  }
+  function deleteEquipment(id) {
+    onUpdate({ equipment: equipment.filter(e => e.id !== id) });
+    setEditingEquipment(null);
+    if (sync) sync.removeEquipment(id);
+  }
+  function handleGeoJSONImport(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        const features = data.features || [];
+        const looksLikeEquipment = features.length>0 && features[0].properties && ('unit_id' in features[0].properties || 'kit' in features[0].properties);
+        if (looksLikeEquipment) {
+          const imported = features.map(f => {
+            const p = f.properties || {};
+            const [lon, lat] = f.geometry.coordinates;
+            const kitLabel = (p.kit || '').toLowerCase();
+            let kitKey = 'OTHER';
+            if (kitLabel.includes('m4t')) kitKey = 'DJI_M4T';
+            else if (kitLabel.includes('m30t')) kitKey = 'DJI_M30T';
+            else if (kitLabel.includes('tk612') || kitLabel.includes('guide')) kitKey = 'TK612';
+            else if (kitLabel.includes('acoustic')) kitKey = 'ACOUSTIC';
+            return {
+              id: uid(), unitId: p.unit_id || p.site || 'Imported', kit: kitKey,
+              lat, lon, bearing: Number(p.bearing)||0,
+              fov: Number(p.fov_deg) || KIT_TYPES[kitKey].fov || 45,
+              radius: Number(p.radius_m) || KIT_TYPES[kitKey].defaultRadius || 50,
+              height: p.height_m != null ? Number(p.height_m) : null,
+              notes: p.notes || ''
+            };
+          });
+          onUpdate({ equipment: [...equipment, ...imported] });
+          alert(`Imported ${imported.length} equipment point(s).`);
+        } else {
+          onUpdate({ referenceLayers: [...referenceLayers, { id: uid(), name: file.name, data }] });
+          alert(`Added "${file.name}" as a reference layer.`);
+        }
+      } catch (err) { alert('Could not parse GeoJSON file: ' + err.message); }
+    };
+    reader.readAsText(file);
+  }
+
+  return (
+    <div className="map-tab">
+      <div className="map-toolbar">
+        <button className="btn btn-secondary btn-small" onClick={()=>fileRef.current && fileRef.current.click()}>
+          <IconUpload/> Import GeoJSON
+        </button>
+        <input ref={fileRef} type="file" accept=".geojson,.json" style={{display:'none'}} onChange={handleGeoJSONImport} />
+        <button className="btn btn-icon btn-small" onClick={centerOnGPS} title="Centre on my location" disabled={!gpsPos}>
+          <IconCrosshair/>
+        </button>
+      </div>
+
+      <div className="map-container" ref={mapRef} />
+
+      {placementMode && (
+        <div className="map-banner">
+          Tap the map to place equipment — or
+          <button className="link-btn" onClick={()=>setPlacementMode(false)}>cancel</button>
+        </div>
+      )}
+
+      <div className="map-actions">
+        <button className="btn btn-primary btn-full" onClick={()=>{ if (gpsPos) addEquipmentAt(gpsPos); else setPlacementMode(true); }}>
+          <IconPlus/> Add equipment {gpsPos ? 'at my location' : '(tap map)'}
+        </button>
+        {gpsPos && (
+          <button className="btn btn-secondary btn-small btn-full" onClick={()=>setPlacementMode(true)} style={{marginTop:6}}>
+            Or tap map to choose position
+          </button>
+        )}
+        {!gpsPos && (
+          <div className="field-hint" style={{marginTop:6, textAlign:'center'}}>Waiting for GPS signal — you can still tap the map to place equipment.</div>
+        )}
+      </div>
+
+      <div className="legend">
+        <div className="legend-title">Map key</div>
+        <div className="legend-grid">
+          {Object.entries(KIT_TYPES).map(([key, kit]) => (
+            <div className="legend-item" key={key}>
+              <span className={`legend-swatch ${kit.shape==='square'?'legend-square':'legend-circle'}`} style={{background:kit.color}} />
+              {kit.label}
+            </div>
+          ))}
+          <div className="legend-item">
+            <span className="legend-swatch legend-circle" style={{background:'#999', border:'2px solid #fff'}} />
+            Observation (colour = activity)
+          </div>
+          <div className="legend-item">
+            <span className="legend-swatch" style={{background:ACTIVITY_COLORS.emergence, clipPath:'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)'}} />
+            Emergence
+          </div>
+          <div className="legend-item">
+            <span className="legend-swatch legend-circle surveyor-dot-mini" />
+            Your position
+          </div>
+          <div className="legend-item">
+            <span className="legend-swatch legend-circle" style={{background:'var(--accent)', border:'2px solid #fff'}} />
+            Other surveyors
+          </div>
+        </div>
+      </div>
+
+      {(editingEquipment || pendingCoords) && (
+        <EquipmentForm
+          equipment={editingEquipment}
+          coords={editingEquipment ? [editingEquipment.lat, editingEquipment.lon] : pendingCoords}
+          observations={observations}
+          onSave={saveEquipment}
+          onDelete={editingEquipment ? ()=>deleteEquipment(editingEquipment.id) : null}
+          onClose={()=>{ setEditingEquipment(null); setPendingCoords(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EquipmentForm({ equipment, coords, observations, onSave, onDelete, onClose }) {
+  const isEdit = !!equipment;
+  const [unitId, setUnitId] = useState(equipment ? equipment.unitId : '');
+  const [kit, setKit] = useState(equipment ? equipment.kit : 'DJI_M4T');
+  const [bearing, setBearing] = useState(equipment ? equipment.bearing : 0);
+  const [fov, setFov] = useState(equipment ? equipment.fov : KIT_TYPES.DJI_M4T.fov);
+  const [radius, setRadius] = useState(equipment ? equipment.radius : KIT_TYPES.DJI_M4T.defaultRadius);
+  const [height, setHeight] = useState(equipment && equipment.height!=null ? equipment.height : '');
+  const [notes, setNotes] = useState(equipment ? (equipment.notes||'') : '');
+  const [photo, setPhoto] = useState(equipment ? (equipment.photo||null) : null);
+  const [showAnnotated, setShowAnnotated] = useState(false);
+  const kitDef = KIT_TYPES[kit];
+  const photoInputRef = useRef(null);
+  const taggedObservations = (observations || []).filter(o => o.equipmentId === (equipment && equipment.id) && o.photoTap);
+
+  function handleKitChange(newKit) {
+    setKit(newKit);
+    const def = KIT_TYPES[newKit];
+    if (def.fov != null) setFov(def.fov);
+    if (def.defaultRadius != null) setRadius(def.defaultRadius);
+  }
+  function handlePhotoUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPhoto(reader.result);
+    reader.readAsDataURL(file);
+  }
+  function handleSave() {
+    onSave({
+      id: equipment ? equipment.id : uid(),
+      unitId: unitId.trim() || kitDef.label,
+      kit, lat: coords[0], lon: coords[1],
+      bearing: Number(bearing),
+      fov: kitDef.shape==='square' ? null : Number(fov),
+      radius: kitDef.shape==='square' ? null : Number(radius),
+      height: height==='' ? null : Number(height),
+      notes, photo
+    });
+  }
+
+  return (
+    <Modal title={isEdit?'Edit equipment':'Add equipment'} onClose={onClose}>
+      <FieldRow label="Unit name">
+        <input className="text-input" placeholder="e.g. Aria, Blue, Point 3" value={unitId} onChange={e=>setUnitId(e.target.value)} autoFocus />
+      </FieldRow>
+      <FieldRow label="Kit type">
+        <select className="text-input" value={kit} onChange={e=>handleKitChange(e.target.value)}>
+          {Object.entries(KIT_TYPES).map(([key,def]) => <option key={key} value={key}>{def.label}</option>)}
+        </select>
+      </FieldRow>
+      {kitDef.shape !== 'square' && (
+        <React.Fragment>
+          <FieldRow label="Bearing (° from North)">
+            <BearingDial value={bearing} onChange={setBearing} />
+          </FieldRow>
+          <FieldRow label={`Field of view (°)${kit!=='OTHER'?' — fixed for this kit':''}`}>
+            <input type="number" className="text-input" value={fov} onChange={e=>setFov(e.target.value)} disabled={kit!=='OTHER'} />
+          </FieldRow>
+          <FieldRow label="Radius (m)">
+            <input type="number" className="text-input" value={radius} onChange={e=>setRadius(e.target.value)} />
+            <div className="field-hint">Default for this kit: {KIT_TYPES[kit].defaultRadius ?? 'manual'}m — adjustable on site.</div>
+          </FieldRow>
+        </React.Fragment>
+      )}
+      <FieldRow label="Flight height (m) — optional, for future viewshed">
+        <input type="number" className="text-input" placeholder="Leave blank if N/A" value={height} onChange={e=>setHeight(e.target.value)} />
+      </FieldRow>
+      <FieldRow label="Notes">
+        <textarea className="text-input textarea" rows={2} value={notes} onChange={e=>setNotes(e.target.value)} />
+      </FieldRow>
+      <FieldRow label="Reference photo — optional, lets surveyors tap a spot on this photo to log an observation (e.g. an emergence point on a gable end)">
+        {photo ? (
+          <div className="photo-preview">
+            <img src={photo} alt="Equipment reference" />
+            <button className="btn btn-secondary btn-small" onClick={()=>setPhoto(null)}>Remove photo</button>
+          </div>
+        ) : (
+          <button className="btn btn-secondary btn-full" onClick={()=>photoInputRef.current && photoInputRef.current.click()}>
+            <IconCamera/> Add reference photo
+          </button>
+        )}
+        <input ref={photoInputRef} type="file" accept="image/*" capture="environment" style={{display:'none'}} onChange={handlePhotoUpload} />
+        {photo && taggedObservations.length > 0 && (
+          <button className="btn btn-secondary btn-full" style={{marginTop:8}} onClick={()=>setShowAnnotated(true)}>
+            View annotated photo ({taggedObservations.length} marked)
+          </button>
+        )}
+      </FieldRow>
+      {showAnnotated && (
+        <AnnotatedPhotoView photo={photo} observations={taggedObservations} onClose={()=>setShowAnnotated(false)} />
+      )}
+      <div className="field-hint" style={{marginBottom:12}}>
+        Position: {coords[0].toFixed(6)}, {coords[1].toFixed(6)}
+        {equipment && equipment.addedBy && <span> · Added by {equipment.addedBy}{equipment.lastModifiedBy && equipment.lastModifiedBy !== equipment.addedBy ? `, last edited by ${equipment.lastModifiedBy}` : ''}</span>}
+      </div>
+      <div className="modal-actions">
+        {onDelete && <button className="btn btn-danger" onClick={onDelete}><IconTrash/></button>}
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={handleSave}>Save</button>
+      </div>
+    </Modal>
+  );
+}
+
+function BearingDial({ value, onChange }) {
+  const dialRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
+  function angleFromEvent(e) {
+    const rect = dialRef.current.getBoundingClientRect();
+    const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    let deg = Math.atan2(clientX-cx, -(clientY-cy)) * 180/Math.PI;
+    return Math.round((deg+360)%360);
+  }
+  function handleDown(e) { setDragging(true); onChange(angleFromEvent(e)); }
+  function handleMove(e) { if (dragging) { e.preventDefault(); onChange(angleFromEvent(e)); } }
+  function handleUp() { setDragging(false); }
+
+  useEffect(() => {
+    if (!dragging) return;
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    window.addEventListener('touchmove', handleMove, { passive:false });
+    window.addEventListener('touchend', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleUp);
+    };
+  }, [dragging]);
+
+  function step(delta) { onChange(((Number(value)+delta)%360+360)%360); }
+
+  return (
+    <div className="bearing-dial-wrap">
+      <div className="bearing-dial" ref={dialRef} onMouseDown={handleDown} onTouchStart={handleDown}>
+        <div className="dial-face">
+          <span className="dial-n">N</span>
+          <div className="dial-needle" style={{transform:`rotate(${value}deg)`}}>
+            <div className="dial-needle-tip" />
+          </div>
+          <div className="dial-center" />
+        </div>
+      </div>
+      <div className="dial-controls">
+        <div className="dial-readout">{Math.round(value)}°</div>
+        <div className="dial-steppers">
+          <button className="btn btn-secondary btn-small" onClick={()=>step(-10)}>-10</button>
+          <button className="btn btn-secondary btn-small" onClick={()=>step(-1)}>-1</button>
+          <button className="btn btn-secondary btn-small" onClick={()=>step(1)}>+1</button>
+          <button className="btn btn-secondary btn-small" onClick={()=>step(10)}>+10</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   OBSERVE TAB
+   ============================================================ */
+function ObserveTab({ session, onUpdate, identity, sync }) {
+  const [showForm, setShowForm] = useState(false);
+  const [gpsPos, setGpsPos] = useState(null);
+  const [analysisMode, setAnalysisMode] = useState(false);
+  const observations = session.observations || [];
+  const equipment = session.equipment || [];
+  const isClosed = session.status === 'closed';
+  const canAdd = !isClosed || analysisMode;
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      pos => setGpsPos([pos.coords.latitude, pos.coords.longitude]),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  function saveObservation(obs) {
+    const exists = observations.find(o => o.id === obs.id);
+    const tagged = (isClosed && analysisMode && !exists) ? { ...obs, addedDuringAnalysis: true } : obs;
+    const stamped = exists ? { ...tagged, lastModifiedBy: identity.name } : { ...tagged, addedBy: identity.name, lastModifiedBy: identity.name };
+    const updated = exists ? observations.map(o => o.id===obs.id ? stamped : o) : [...observations, stamped];
+    onUpdate({ observations: updated, lastEquipmentId: obs.equipmentId });
+    setShowForm(false);
+    if (sync) sync.pushObservation(stamped);
+  }
+  function deleteObservation(id) {
+    onUpdate({ observations: observations.filter(o => o.id !== id) });
+    if (sync) sync.removeObservation(id);
+  }
+  const sorted = [...observations].sort((a,b) => (a.time||'').localeCompare(b.time||''));
+
+  return (
+    <div className="observe-tab">
+      {isClosed && !analysisMode && (
+        <div className="map-banner" style={{marginBottom:12}}>
+          This session is closed. Adding observations is locked to protect survey data —
+          <button className="link-btn" onClick={()=>{
+            if (confirm('Unlock this closed session to add post-survey analysis notes?\n\nEntries added now will be flagged as "added during analysis" in the export, separate from field data.')) {
+              setAnalysisMode(true);
+            }
+          }}>unlock for analysis</button>
+        </div>
+      )}
+      {isClosed && analysisMode && (
+        <div className="map-banner" style={{marginBottom:12, background:'var(--teal-dim)', color:'var(--teal)'}}>
+          Analysis mode — new entries will be flagged as added after the survey closed.
+        </div>
+      )}
+      <button className="btn btn-primary btn-full" onClick={()=>setShowForm(true)} style={{marginBottom:12}} disabled={!canAdd}>
+        <IconPlus/> Add observation
+      </button>
+      {sorted.length === 0 && (
+        <div className="empty-state" style={{padding:'30px 16px'}}>
+          <div className="empty-text">No observations logged yet for this session.</div>
+        </div>
+      )}
+      <div className="card-list">
+        {sorted.map(obs => {
+          const canDelete = identity.isSuperuser || obs.addedBy === identity.name || !obs.addedBy;
+          return <ObservationCard key={obs.id} obs={obs} equipment={equipment} onDelete={canDelete ? ()=>deleteObservation(obs.id) : null} />;
+        })}
+      </div>
+      {showForm && (
+        <ObservationForm gpsPos={gpsPos} equipment={equipment} lastEquipmentId={session.lastEquipmentId}
+          identity={identity} onSave={saveObservation} onClose={()=>setShowForm(false)} />
+      )}
+    </div>
+  );
+}
+
+function ObservationCard({ obs, equipment, onDelete }) {
+  const eq = equipment.find(e => e.id === obs.equipmentId);
+  const color = ACTIVITY_COLORS[obs.activity] || ACTIVITY_COLORS.unknown;
+  return (
+    <div className="card obs-card">
+      <div className="obs-color-bar" style={{background:color}} />
+      <div className="card-main">
+        <div className="card-title">{obs.species}</div>
+        <div className="card-sub">
+          {obs.time} · {(ACTIVITY_TYPES.find(a=>a.id===obs.activity)||{}).label || obs.activity}
+          {eq && ` · ${eq.unitId}`}
+          {(obs.lat == null || obs.lon == null) && ' · no location'}
+          {obs.photoTap && ' · marked on photo'}
+          {obs.addedDuringAnalysis && ' · post-survey'}
+          {obs.addedBy && ` · ${obs.addedBy}`}
+        </div>
+        {obs.notes && <div className="obs-notes">{obs.notes}</div>}
+      </div>
+      {onDelete && <button className="btn btn-icon btn-small" onClick={onDelete} aria-label="Delete observation"><IconTrash/></button>}
+    </div>
+  );
+}
+
+function AnnotatedPhotoView({ photo, observations, onClose }) {
+  return (
+    <Modal title="Annotated photo" onClose={onClose}>
+      <div className="field-hint" style={{marginBottom:10}}>
+        Markers show where each observation was tapped on this photo. Colour = activity type.
+      </div>
+      <div className="photo-tap-wrap" style={{cursor:'default'}}>
+        <img src={photo} alt="Reference" draggable={false} />
+        {observations.map(obs => (
+          <div
+            key={obs.id}
+            className={`photo-tap-marker ${obs.activity === 'emergence' ? 'photo-tap-marker-star' : ''}`}
+            style={{
+              left: `${obs.photoTap.x*100}%`,
+              top: `${obs.photoTap.y*100}%`,
+              background: ACTIVITY_COLORS[obs.activity] || ACTIVITY_COLORS.unknown
+            }}
+            title={`${obs.species} — ${obs.time}`}
+          />
+        ))}
+      </div>
+      <div className="card-list" style={{marginTop:10}}>
+        {observations.map(obs => (
+          <div className="card obs-card" key={obs.id}>
+            <div className="obs-color-bar" style={{background: ACTIVITY_COLORS[obs.activity] || ACTIVITY_COLORS.unknown}} />
+            <div className="card-main">
+              <div className="card-title">{obs.species}</div>
+              <div className="card-sub">{obs.time} · {(ACTIVITY_TYPES.find(a=>a.id===obs.activity)||{}).label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="modal-actions">
+        <button className="btn btn-secondary btn-full" onClick={onClose}>Close</button>
+      </div>
+    </Modal>
+  );
+}
+
+function PhotoTapPicker({ photo, initialPos, onPick, onClose }) {
+  const imgRef = useRef(null);
+  const [pos, setPos] = useState(initialPos);
+
+  function handleTap(e) {
+    const rect = imgRef.current.getBoundingClientRect();
+    const clientX = e.touches ? e.changedTouches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.changedTouches[0].clientY : e.clientY;
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+    setPos({ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) });
+  }
+
+  if (!photo) {
+    return (
+      <Modal title="Tap point on photo" onClose={onClose}>
+        <div className="field-hint">No reference photo set for this equipment.</div>
+        <div className="modal-actions"><button className="btn btn-secondary btn-full" onClick={onClose}>Close</button></div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title="Tap point on photo" onClose={onClose}>
+      <div className="field-hint" style={{marginBottom:10}}>Tap the spot where the activity was observed — e.g. a gable end or ridge tile.</div>
+      <div className="photo-tap-wrap" ref={imgRef} onClick={handleTap}>
+        <img src={photo} alt="Reference" draggable={false} />
+        {pos && <div className="photo-tap-marker" style={{ left: `${pos.x*100}%`, top: `${pos.y*100}%` }} />}
+      </div>
+      <div className="field-hint" style={{marginTop:10}}>
+        {pos ? 'Point marked — tap again to move it.' : 'Tap the photo to mark the spot.'}
+      </div>
+      <div className="modal-actions">
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" disabled={!pos} onClick={()=>onPick(pos)}>Use this point</button>
+      </div>
+    </Modal>
+  );
+}
+
+function PointPickerMap({ initialCoords, centerHint, onPick, onClose }) {
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markerRef = useRef(null);
+  const [coords, setCoords] = useState(initialCoords);
+
+  useEffect(() => {
+    const L = window.L;
+    if (!L || !mapRef.current || mapInstanceRef.current) return;
+    const center = initialCoords || centerHint || [51.5, -0.1];
+    const map = L.map(mapRef.current, { zoomControl: true }).setView(center, (initialCoords || centerHint) ? 19 : 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, attribution: '© OpenStreetMap' }).addTo(map);
+
+    if (initialCoords) {
+      markerRef.current = L.marker(initialCoords, { draggable: true }).addTo(map);
+      markerRef.current.on('dragend', () => {
+        const ll = markerRef.current.getLatLng();
+        setCoords([ll.lat, ll.lng]);
+      });
+    }
+
+    map.on('click', (e) => {
+      const { lat, lng } = e.latlng;
+      if (markerRef.current) {
+        markerRef.current.setLatLng([lat, lng]);
+      } else {
+        markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map);
+        markerRef.current.on('dragend', () => {
+          const ll = markerRef.current.getLatLng();
+          setCoords([ll.lat, ll.lng]);
+        });
+      }
+      setCoords([lat, lng]);
+    });
+
+    mapInstanceRef.current = map;
+    setTimeout(() => map.invalidateSize(), 100);
+
+    if (!initialCoords && !centerHint && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => map.setView([pos.coords.latitude, pos.coords.longitude], 18),
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+
+    return () => { map.remove(); mapInstanceRef.current = null; };
+  }, []);
+
+  return (
+    <Modal title="Pick location" onClose={onClose}>
+      <div className="field-hint" style={{marginBottom:10}}>Tap the map to drop a pin, or drag it to adjust.</div>
+      <div className="map-container" style={{height:280}} ref={mapRef} />
+      <div className="field-hint" style={{marginTop:10}}>
+        {coords ? `${coords[0].toFixed(6)}, ${coords[1].toFixed(6)}` : 'Tap the map to set a point.'}
+      </div>
+      <div className="modal-actions">
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" disabled={!coords} onClick={()=>onPick(coords)}>Use this point</button>
+      </div>
+    </Modal>
+  );
+}
+
+function ObservationForm({ gpsPos, equipment, lastEquipmentId, identity, onSave, onClose }) {
+  const [time, setTime] = useState(nowTimeStr());
+  const [species, setSpecies] = useState(UK_SPECIES[0]);
+  const [activity, setActivity] = useState('emergence');
+  const [equipmentId, setEquipmentId] = useState(lastEquipmentId || (equipment[0] ? equipment[0].id : ''));
+  const [notes, setNotes] = useState('');
+  const [locMode, setLocMode] = useState('gps');
+  const [manualCoords, setManualCoords] = useState(gpsPos || null);
+  const [showPicker, setShowPicker] = useState(false);
+  const [photoTapEquipmentId, setPhotoTapEquipmentId] = useState('');
+  const [photoTapPos, setPhotoTapPos] = useState(null); // {x, y} as fractions 0-1
+  const [showPhotoPicker, setShowPhotoPicker] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef(null);
+
+  const equipmentWithPhotos = equipment.filter(eq => eq.photo);
+
+  const coords = locMode === 'gps' ? gpsPos
+    : locMode === 'manual' ? manualCoords
+    : locMode === 'photo' ? (() => {
+        const eq = equipment.find(e => e.id === photoTapEquipmentId);
+        return eq ? [eq.lat, eq.lon] : null;
+      })()
+    : null;
+
+  function toggleSpeech() {
+    if (isRecording) { recognitionRef.current && recognitionRef.current.stop(); setIsRecording(false); return; }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) { alert('Speech recognition is not available on this device/browser. Please type notes manually.'); return; }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-GB';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (e) => setNotes(prev => (prev ? prev+' ' : '') + e.results[0][0].transcript);
+    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => setIsRecording(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+  }
+
+  function handleSave() {
+    if (locMode === 'photo' && photoTapEquipmentId && !photoTapPos) {
+      alert('Tap a point on the photo to mark where this was observed.');
+      return;
+    }
+    if (!coords) {
+      const proceed = confirm('No location set — save this observation without coordinates? You can add a location later if needed.');
+      if (!proceed) return;
+    }
+    const eq = equipment.find(e => e.id === (locMode === 'photo' ? photoTapEquipmentId : equipmentId));
+    onSave({
+      id: uid(), time, lat: coords ? coords[0] : null, lon: coords ? coords[1] : null, species, activity,
+      equipmentId: (locMode === 'photo' ? photoTapEquipmentId : equipmentId) || null,
+      equipmentUnitId: eq ? eq.unitId : '',
+      notes,
+      photoTap: (locMode === 'photo' && photoTapPos) ? { x: photoTapPos.x, y: photoTapPos.y } : null,
+    });
+  }
+
+  return (
+    <Modal title="Add observation" onClose={onClose}>
+      <FieldRow label="Time">
+        <div className="inline-field">
+          <input type="time" className="text-input" value={time} onChange={e=>setTime(e.target.value)} />
+          <button className="btn btn-secondary btn-small" onClick={()=>setTime(nowTimeStr())}>Now</button>
+        </div>
+      </FieldRow>
+      <FieldRow label="Location">
+        <div className="segmented">
+          <button className={`segment ${locMode==='gps'?'segment-active':''}`} onClick={()=>setLocMode('gps')}><IconCrosshair/> My position</button>
+          <button className={`segment ${locMode==='manual'?'segment-active':''}`} onClick={()=>setLocMode('manual')}><IconMapPin/> Mark point</button>
+        </div>
+        {equipmentWithPhotos.length > 0 && (
+          <div className="segmented" style={{marginTop:6}}>
+            <button className={`segment ${locMode==='photo'?'segment-active':''}`} onClick={()=>setLocMode('photo')}><IconCamera/> From photo</button>
+          </div>
+        )}
+        {locMode==='gps' && (
+          <div className="field-hint">
+            {gpsPos ? `${gpsPos[0].toFixed(6)}, ${gpsPos[1].toFixed(6)}` : 'Waiting for GPS signal — if this site has no signal/no fix, switch to "Mark point" to enter coordinates manually, or save without a location.'}
+          </div>
+        )}
+        {locMode==='manual' && (
+          <div className="field-hint">
+            Use current position as starting point and adjust below — e.g. for an emergence point on a roofline away from where you're standing.
+            <div className="inline-field" style={{marginTop:6}}>
+              <input type="number" step="0.000001" className="text-input" value={manualCoords ? manualCoords[0] : ''} onChange={e=>setManualCoords([Number(e.target.value), manualCoords ? manualCoords[1] : 0])} placeholder="Latitude" />
+              <input type="number" step="0.000001" className="text-input" value={manualCoords ? manualCoords[1] : ''} onChange={e=>setManualCoords([manualCoords ? manualCoords[0] : 0, Number(e.target.value)])} placeholder="Longitude" />
+            </div>
+            <div className="inline-field" style={{marginTop:6}}>
+              <button className="btn btn-secondary btn-small btn-full" onClick={()=>setShowPicker(true)}><IconMapPin/> Pick on map</button>
+              {gpsPos && <button className="btn btn-secondary btn-small btn-full" onClick={()=>setManualCoords(gpsPos)}>Use my position</button>}
+            </div>
+            {!manualCoords && !gpsPos && <div style={{marginTop:6}}>No GPS fix yet — type coordinates, pick on map, or save without a location.</div>}
+          </div>
+        )}
+        {locMode==='photo' && (
+          <div className="field-hint">
+            <select className="text-input" value={photoTapEquipmentId} onChange={e=>{ setPhotoTapEquipmentId(e.target.value); setPhotoTapPos(null); }} style={{marginBottom:8}}>
+              <option value="">— Choose equipment photo —</option>
+              {equipmentWithPhotos.map(eq => <option key={eq.id} value={eq.id}>{eq.unitId} ({(KIT_TYPES[eq.kit]||{}).label})</option>)}
+            </select>
+            {photoTapEquipmentId && (
+              <React.Fragment>
+                <button className="btn btn-secondary btn-small btn-full" onClick={()=>setShowPhotoPicker(true)}>
+                  <IconCamera/> {photoTapPos ? 'Adjust point on photo' : 'Tap point on photo'}
+                </button>
+                {photoTapPos && <div style={{marginTop:6}}>Point marked on photo. Location used for export: the equipment's recorded position.</div>}
+              </React.Fragment>
+            )}
+          </div>
+        )}
+      </FieldRow>
+
+      {showPhotoPicker && photoTapEquipmentId && (
+        <PhotoTapPicker
+          photo={(equipment.find(e=>e.id===photoTapEquipmentId)||{}).photo}
+          initialPos={photoTapPos}
+          onPick={(pos) => { setPhotoTapPos(pos); setShowPhotoPicker(false); }}
+          onClose={() => setShowPhotoPicker(false)}
+        />
+      )}
+
+      {showPicker && (
+        <PointPickerMap
+          initialCoords={manualCoords || null}
+          centerHint={gpsPos}
+          onPick={(coords) => { setManualCoords(coords); setShowPicker(false); }}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
+
+      <FieldRow label="Species">
+        <select className="text-input" value={species} onChange={e=>setSpecies(e.target.value)}>
+          {UK_SPECIES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </FieldRow>
+      <FieldRow label="Activity type">
+        <select className="text-input" value={activity} onChange={e=>setActivity(e.target.value)}>
+          {ACTIVITY_TYPES.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+        </select>
+      </FieldRow>
+      {locMode !== 'photo' && (
+        <FieldRow label="Equipment point">
+          <select className="text-input" value={equipmentId} onChange={e=>setEquipmentId(e.target.value)}>
+            <option value="">— None —</option>
+            {equipment.map(eq => <option key={eq.id} value={eq.id}>{eq.unitId} ({(KIT_TYPES[eq.kit]||{}).label})</option>)}
+          </select>
+          <div className="field-hint">Remembered for the next observation — change anytime.</div>
+        </FieldRow>
+      )}
+      <FieldRow label="Notes">
+        <div className="notes-input-wrap">
+          <textarea className="text-input textarea" rows={3} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Type or use voice..." />
+          <button className={`voice-btn ${isRecording?'voice-btn-active':''}`} onClick={toggleSpeech} aria-label="Voice note">
+            {isRecording ? <IconSquare/> : <IconMic/>}
+          </button>
+        </div>
+        {isRecording && <div className="field-hint">Listening... tap again to stop. Edit the text afterwards if needed.</div>}
+      </FieldRow>
+      <div className="modal-actions">
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={handleSave}>Save observation</button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ============================================================
+   SHARED UI
+   ============================================================ */
+function BrandBar() {
+  return <div className="brand-bar">Aerial Ecology · BatAssist</div>;
+}
+
+function Header({ title, subtitle, onBack, identity, onSwitchUser }) {
+  return (
+    <div className="header-wrap">
+      <BrandBar />
+      <div className="header">
+        {onBack && <button className="back-btn" onClick={onBack} aria-label="Back"><span style={{width:22,height:22}}><IconBack/></span></button>}
+        <div className="header-text">
+          <div className="header-title">{title}</div>
+          {subtitle && <div className="header-subtitle">{subtitle}</div>}
+        </div>
+        {identity && (
+          <button className="identity-pill" onClick={onSwitchUser}>
+            <span style={{width:14,height:14}}><IconUser/></span>
+            {identity.name}
+            {identity.isSuperuser && <span style={{width:12,height:12}}><IconLock/></span>}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+function EmptyState({ icon, title, text }) {
+  return (
+    <div className="empty-state">
+      <div className="empty-icon" style={{width:32,height:32}}>{icon}</div>
+      <div className="empty-title">{title}</div>
+      <div className="empty-text">{text}</div>
+    </div>
+  );
+}
+function IdentityModal({ current, onSave, onClose }) {
+  const [name, setName] = useState(current ? current.name : '');
+  const [wantsSuperuser, setWantsSuperuser] = useState(current ? current.isSuperuser : false);
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState(false);
+  const canClose = !!current; // first-run (no current identity) cannot be dismissed without saving
+
+  function handleSave() {
+    if (!name.trim()) return;
+    let isSuperuser = current ? current.isSuperuser : false;
+    if (wantsSuperuser && !isSuperuser) {
+      if (pin === COORDINATOR_PIN) {
+        isSuperuser = true;
+        setPinError(false);
+      } else {
+        setPinError(true);
+        return;
+      }
+    }
+    if (!wantsSuperuser) isSuperuser = false;
+    onSave({ name: name.trim(), isSuperuser });
+  }
+
+  return (
+    <Modal title={current ? 'Switch user' : 'Welcome'} onClose={canClose ? onClose : undefined}>
+      {!current && (
+        <p className="modal-text" style={{marginBottom:14}}>
+          Enter your name — this is recorded against every observation and equipment change you make, so the team knows who logged what.
+        </p>
+      )}
+      <FieldRow label="Your name">
+        <input className="text-input" placeholder="e.g. Rob, Sarah" value={name} onChange={e=>setName(e.target.value)} autoFocus />
+      </FieldRow>
+      <FieldRow label="Coordinator access">
+        <div className="segmented">
+          <button className={`segment ${!wantsSuperuser?'segment-active':''}`} onClick={()=>setWantsSuperuser(false)}>Surveyor</button>
+          <button className={`segment ${wantsSuperuser?'segment-active':''}`} onClick={()=>setWantsSuperuser(true)}><IconLock/> Coordinator</button>
+        </div>
+        {wantsSuperuser && !(current && current.isSuperuser) && (
+          <div style={{marginTop:8}}>
+            <input type="password" inputMode="numeric" className="text-input" placeholder="Enter coordinator PIN" value={pin} onChange={e=>{ setPin(e.target.value); setPinError(false); }} />
+            {pinError && <div className="field-hint field-hint-error">Incorrect PIN.</div>}
+          </div>
+        )}
+        <div className="field-hint">Coordinators can edit session setup, manage projects, and export data. Everyone can use the map and log observations.</div>
+      </FieldRow>
+      <div className="modal-actions">
+        {canClose && <button className="btn btn-secondary" onClick={onClose}>Cancel</button>}
+        <button className="btn btn-primary btn-full" disabled={!name.trim()} onClick={handleSave}>Save</button>
+      </div>
+    </Modal>
+  );
+}
+
+function Modal({ children, onClose, title }) {
+  return (
+    <div className="modal-overlay" onClick={onClose || undefined}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title">{title}</div>
+          {onClose && <button className="modal-close" onClick={onClose}><IconX/></button>}
+        </div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+function Section({ title, children }) {
+  return <div className="section"><div className="section-title">{title}</div>{children}</div>;
+}
+function FieldRow({ label, children }) {
+  return <div className="field-row"><label className="field-label">{label}</label>{children}</div>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
