@@ -107,6 +107,10 @@ html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-
 .spinner { width:16px; height:16px; border:2px solid var(--text-faint); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .placeholder-tab { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:80px 24px; color:var(--text-muted); font-size:14px; line-height:1.6; }
+.export-tab { display:flex; flex-direction:column; }
+.check-row { display:flex; align-items:center; gap:10px; padding:10px 0; font-size:14px; cursor:pointer; }
+.check-row input { width:18px; height:18px; accent-color:var(--accent); flex-shrink:0; }
+.export-tab code { font-family:var(--font-mono); background:var(--bg); padding:1px 5px; border-radius:4px; font-size:12px; }
 .muted-small { font-size:12px; color:var(--text-faint); margin-top:8px; }
 
 .map-tab { display:flex; flex-direction:column; gap:10px; }
@@ -163,6 +167,8 @@ html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -282,6 +288,88 @@ function haversine(lat1, lon1, lat2, lon2) {
   const dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
   return 2*R*Math.asin(Math.sqrt(a));
+}
+
+/* ============================================================
+   EXPORT HELPERS
+   ============================================================ */
+function sanitizeFilenamePart(s) {
+  return String(s || '').trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+function exportFilenameBase(project, session) {
+  return [sanitizeFilenamePart(project.name), sanitizeFilenamePart(session.date).replace(/-/g,''), sanitizeFilenamePart(session.label)].filter(Boolean).join('_');
+}
+function csvEscape(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function toCSV(rows, headers) {
+  const lines = [headers.join(',')];
+  for (const row of rows) lines.push(headers.map(h => csvEscape(row[h])).join(','));
+  return lines.join('\n');
+}
+const OBS_CSV_HEADERS = ['project_name','survey_date','session_id','surveyor_id','observation_time','latitude','longitude','equipment_point','species','activity_type','notes','photo_ref'];
+function observationsToCSVRows(project, session) {
+  const equipment = session.equipment || [];
+  return (session.observations || []).map(obs => {
+    const eq = equipment.find(e => e.id === obs.equipmentId);
+    return {
+      project_name: project.name,
+      survey_date: session.date,
+      session_id: session.label,
+      surveyor_id: obs.addedBy || '',
+      observation_time: obs.time,
+      latitude: obs.lat != null ? obs.lat : '',
+      longitude: obs.lon != null ? obs.lon : '',
+      equipment_point: eq ? eq.unitId : (obs.equipmentUnitId || ''),
+      species: obs.species,
+      activity_type: (ACTIVITY_TYPES.find(a=>a.id===obs.activity)||{}).label || obs.activity,
+      notes: obs.notes || '',
+      photo_ref: obs.photoTap ? `${(eq && eq.unitId) || obs.equipmentUnitId || 'equipment'}_photo (tap at ${(obs.photoTap.x*100).toFixed(0)}%,${(obs.photoTap.y*100).toFixed(0)}%)` : '',
+    };
+  });
+}
+function observationsToGeoJSON(project, session) {
+  const rows = observationsToCSVRows(project, session);
+  const obsList = session.observations || [];
+  return {
+    type: 'FeatureCollection',
+    features: rows.map((row, i) => {
+      const obs = obsList[i];
+      if (obs.lat == null || obs.lon == null) return null;
+      return {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [obs.lon, obs.lat] },
+        properties: row,
+      };
+    }).filter(Boolean)
+  };
+}
+function equipmentToGeoJSON(project, session) {
+  return {
+    type: 'FeatureCollection',
+    features: (session.equipment || []).map(eq => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [eq.lon, eq.lat] },
+      properties: {
+        site: project.name, unit_id: eq.unitId, kit: (KIT_TYPES[eq.kit]||{}).label || eq.kit,
+        radius_m: eq.radius, bearing: eq.bearing, fov_deg: eq.fov, height_m: eq.height,
+        notes: eq.notes || '', added_by: eq.addedBy || ''
+      }
+    }))
+  };
+}
+function downloadBlob(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /* ============================================================
@@ -914,7 +1002,7 @@ function SessionScreen({ project, session, identity, onSwitchUser, onBack, onUpd
         {tab==='map' && <MapTab session={session} onUpdate={onUpdate} identity={identity} sync={sync} />}
         {tab==='observe' && <ObserveTab session={session} onUpdate={onUpdate} identity={identity} sync={sync} />}
         {tab==='export' && (identity.isSuperuser
-          ? <PlaceholderTab label="Export: CSV + GeoJSON + PDF, email via EmailJS — built in final module" />
+          ? <ExportTab project={project} session={session} onUpdate={onUpdate} />
           : <LockedTab label="Export is available to coordinators only." />)}
       </div>
     </div>
@@ -936,6 +1024,202 @@ function PlaceholderTab({ label }) {
       <p>{label}</p>
       <p className="muted-small">Not built yet in this test version.</p>
     </div>
+  );
+}
+
+/* ============================================================
+   EXPORT TAB
+   ============================================================ */
+function ExportTab({ project, session, onUpdate }) {
+  const [formats, setFormats] = useState({ csv: true, geojson: true, pdf: true });
+  const [generating, setGenerating] = useState(false);
+  const observations = session.observations || [];
+  const equipment = session.equipment || [];
+  const baseName = exportFilenameBase(project, session);
+
+  function toggleFormat(key) {
+    setFormats(f => ({ ...f, [key]: !f[key] }));
+  }
+
+  function generateCSV() {
+    const rows = observationsToCSVRows(project, session);
+    const csv = toCSV(rows, OBS_CSV_HEADERS);
+    downloadBlob(`${baseName}.csv`, csv, 'text/csv');
+  }
+
+  function generateGeoJSON() {
+    const geojson = observationsToGeoJSON(project, session);
+    downloadBlob(`${baseName}_observations.geojson`, JSON.stringify(geojson, null, 2), 'application/geo+json');
+    if (equipment.length > 0) {
+      const eqGeojson = equipmentToGeoJSON(project, session);
+      downloadBlob(`${baseName}_equipment.geojson`, JSON.stringify(eqGeojson, null, 2), 'application/geo+json');
+    }
+  }
+
+  function generatePDF() {
+    if (!window.jspdf) { alert('PDF library failed to load — check your internet connection and try again.'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let y = 18;
+
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text('AERIAL ECOLOGY · BATASSIST', 14, 10);
+
+    doc.setFontSize(18);
+    doc.setTextColor(20);
+    doc.text('Bat Emergence Survey Report', 14, y);
+    y += 9;
+
+    doc.setFontSize(11);
+    doc.setTextColor(80);
+    doc.text(`${project.name} — ${session.label}`, 14, y);
+    y += 6;
+    doc.setFontSize(9);
+    doc.text(`Date: ${session.date}    Generated: ${new Date().toLocaleString()}`, 14, y);
+    y += 10;
+
+    // Session details table
+    const weather = session.weather || {};
+    const weatherEnd = session.weatherEnd || {};
+    const detailRows = [
+      ['Sunset', session.sunset || '—'],
+      ['Survey start', session.surveyStart || '—'],
+      ['Survey end', session.surveyEnd || '—'],
+      ['Weather (start)', [weather.temp && `${weather.temp}°C`, weather.wind, weather.cloud && `${weather.cloud}% cloud`, weather.precip].filter(Boolean).join(', ') || '—'],
+      ['Weather (end)', [weatherEnd.temp && `${weatherEnd.temp}°C`, weatherEnd.wind, weatherEnd.cloud && `${weatherEnd.cloud}% cloud`, weatherEnd.precip].filter(Boolean).join(', ') || '—'],
+      ['Session notes', session.notes || '—'],
+    ];
+    doc.autoTable({
+      startY: y, theme: 'plain', styles: { fontSize: 9, cellPadding: 1.5 },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 35 } },
+      body: detailRows,
+    });
+    y = doc.lastAutoTable.finalY + 8;
+
+    // Equipment table
+    if (equipment.length > 0) {
+      if (y > 250) { doc.addPage(); y = 18; }
+      doc.setFontSize(12);
+      doc.setTextColor(20);
+      doc.text('Equipment', 14, y);
+      y += 4;
+      doc.autoTable({
+        startY: y, headStyles: { fillColor: [232,131,58] }, styles: { fontSize: 8 },
+        head: [['Unit', 'Kit', 'Bearing', 'Radius (m)', 'FOV (°)', 'Height (m)', 'Added by']],
+        body: equipment.map(eq => [
+          eq.unitId, (KIT_TYPES[eq.kit]||{}).label || eq.kit,
+          eq.bearing != null ? `${Math.round(eq.bearing)}°` : '—',
+          eq.radius ?? '—', eq.fov ?? '—', eq.height ?? '—', eq.addedBy || '—'
+        ]),
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    }
+
+    // Observations table
+    if (y > 250) { doc.addPage(); y = 18; }
+    doc.setFontSize(12);
+    doc.setTextColor(20);
+    doc.text(`Observations (${observations.length})`, 14, y);
+    y += 4;
+    const sortedObs = [...observations].sort((a,b) => (a.time||'').localeCompare(b.time||''));
+    doc.autoTable({
+      startY: y, headStyles: { fillColor: [232,131,58] }, styles: { fontSize: 8 },
+      head: [['Time', 'Species', 'Activity', 'Equipment', 'Surveyor', 'Notes']],
+      body: sortedObs.map(obs => {
+        const eq = equipment.find(e => e.id === obs.equipmentId);
+        const notes = (obs.notes || '') + (obs.addedDuringAnalysis ? ' (post-survey)' : '');
+        return [
+          obs.time, obs.species, (ACTIVITY_TYPES.find(a=>a.id===obs.activity)||{}).label || obs.activity,
+          eq ? eq.unitId : (obs.equipmentUnitId || '—'), obs.addedBy || '—', notes || '—'
+        ];
+      }),
+    });
+
+    doc.save(`${baseName}.pdf`);
+  }
+
+  async function handleGenerate() {
+    setGenerating(true);
+    try {
+      if (formats.csv) generateCSV();
+      if (formats.geojson) generateGeoJSON();
+      if (formats.pdf) generatePDF();
+    } catch (e) {
+      alert('Something went wrong generating the export: ' + e.message);
+    }
+    setGenerating(false);
+  }
+
+  const anySelected = formats.csv || formats.geojson || formats.pdf;
+
+  return (
+    <div className="export-tab">
+      <Section title="Export this session">
+        <div className="field-hint" style={{marginBottom:12}}>
+          Files are named <code>{baseName}</code> and download to this device. Photos and reference layers are not included — they stay on each device for now.
+        </div>
+        <CheckRow label="CSV — observations (spreadsheet)" checked={formats.csv} onChange={()=>toggleFormat('csv')} />
+        <CheckRow label="GeoJSON — observations + equipment (for QGIS)" checked={formats.geojson} onChange={()=>toggleFormat('geojson')} />
+        <CheckRow label="PDF — summary report" checked={formats.pdf} onChange={()=>toggleFormat('pdf')} />
+        <button className="btn btn-primary btn-full" style={{marginTop:14}} disabled={!anySelected || generating} onClick={handleGenerate}>
+          <IconDownload/> {generating ? 'Generating...' : 'Download selected'}
+        </button>
+      </Section>
+
+      <EmailExportSection project={project} session={session} formats={formats} baseName={baseName}
+        generateCSV={generateCSV} generateGeoJSON={generateGeoJSON} generatePDF={generatePDF} />
+
+      <Section title="Session summary">
+        <div className="field-row">
+          <div className="card-sub" style={{fontFamily:'var(--font-mono)'}}>
+            {equipment.length} equipment point{equipment.length===1?'':'s'} · {observations.length} observation{observations.length===1?'':'s'}
+          </div>
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+function CheckRow({ label, checked, onChange }) {
+  return (
+    <label className="check-row">
+      <input type="checkbox" checked={checked} onChange={onChange} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+/* ------------------------------------------------------------
+   EMAIL EXPORT (EmailJS) — gracefully degraded if not configured
+   ------------------------------------------------------------ */
+const EMAILJS_CONFIG = {
+  serviceId: '',   // e.g. 'service_xxxxxxx'
+  templateId: '',  // e.g. 'template_xxxxxxx'
+  publicKey: '',   // e.g. 'user_xxxxxxxxxxxxxxxx'
+  toEmail: 'surveys@aerial-ecology.co.uk',
+};
+
+function EmailExportSection({ project, session, formats, baseName }) {
+  const configured = EMAILJS_CONFIG.serviceId && EMAILJS_CONFIG.templateId && EMAILJS_CONFIG.publicKey;
+
+  if (!configured) {
+    return (
+      <Section title="Email export">
+        <div className="field-hint">
+          Automatic email to <strong>{EMAILJS_CONFIG.toEmail}</strong> isn't set up yet — this needs a free EmailJS account connected once.
+          For now, download the files above and send them manually (email, AirDrop, etc.).
+        </div>
+      </Section>
+    );
+  }
+
+  // Placeholder for when EmailJS is configured — implemented in a follow-up
+  return (
+    <Section title="Email export">
+      <div className="field-hint">Email sending will be available once EmailJS is connected.</div>
+    </Section>
   );
 }
 
@@ -1292,6 +1576,7 @@ function MapTab({ session, onUpdate, identity, sync }) {
   const [editingEquipment, setEditingEquipment] = useState(null);
   const [placementMode, setPlacementMode] = useState(false);
   const [pendingCoords, setPendingCoords] = useState(null);
+  const [pendingReferenceLayer, setPendingReferenceLayer] = useState(null);
   const placementModeRef = useRef(false);
   const fileRef = useRef(null);
 
@@ -1456,7 +1741,7 @@ function MapTab({ session, onUpdate, identity, sync }) {
         }).addTo(map);
         gj.eachLayer(l => {
           const props = (l.feature && l.feature.properties) || {};
-          const label = props.label || props.name || props.building || props.id || '';
+          const label = layer.labelField ? props[layer.labelField] : (props.label || props.name || props.building || props.id || '');
           if (label) l.bindTooltip(String(label), { permanent: false });
         });
         layersRef.current.reference.push(gj);
@@ -1521,8 +1806,15 @@ function MapTab({ session, onUpdate, identity, sync }) {
           onUpdate({ equipment: [...equipment, ...imported] });
           alert(`Imported ${imported.length} equipment point(s).`);
         } else {
-          onUpdate({ referenceLayers: [...referenceLayers, { id: uid(), name: file.name, data }] });
-          alert(`Added "${file.name}" as a reference layer.`);
+          // Reference layer (boundary, building polygons, etc.) — let the
+          // user choose which property to use as the on-map label
+          const propKeys = features.length > 0 ? Object.keys(features[0].properties || {}) : [];
+          if (propKeys.length === 0) {
+            onUpdate({ referenceLayers: [...referenceLayers, { id: uid(), name: file.name, data, labelField: null }] });
+            alert(`Added "${file.name}" as a reference layer.`);
+          } else {
+            setPendingReferenceLayer({ name: file.name, data, propKeys });
+          }
         }
       } catch (err) { alert('Could not parse GeoJSON file: ' + err.message); }
     };
@@ -1602,7 +1894,43 @@ function MapTab({ session, onUpdate, identity, sync }) {
           onClose={()=>{ setEditingEquipment(null); setPendingCoords(null); }}
         />
       )}
+
+      {pendingReferenceLayer && (
+        <ReferenceLayerImportModal
+          pending={pendingReferenceLayer}
+          onConfirm={(labelField) => {
+            onUpdate({ referenceLayers: [...referenceLayers, { id: uid(), name: pendingReferenceLayer.name, data: pendingReferenceLayer.data, labelField }] });
+            setPendingReferenceLayer(null);
+          }}
+          onClose={()=>setPendingReferenceLayer(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function ReferenceLayerImportModal({ pending, onConfirm, onClose }) {
+  // Guess a sensible default label field
+  const guess = pending.propKeys.find(k => /ref|name|label|building|id/i.test(k)) || pending.propKeys[0];
+  const [labelField, setLabelField] = useState(guess);
+
+  return (
+    <Modal title="Import reference layer" onClose={onClose}>
+      <p className="modal-text" style={{marginBottom:14}}>
+        "{pending.name}" looks like a reference layer (e.g. site boundary or building polygons) — it'll be shown on the map as a non-editable overlay.
+      </p>
+      <FieldRow label="Label features using">
+        <select className="text-input" value={labelField || ''} onChange={e=>setLabelField(e.target.value || null)}>
+          <option value="">— No label —</option>
+          {pending.propKeys.map(k => <option key={k} value={k}>{k}</option>)}
+        </select>
+        <div className="field-hint">e.g. a "building_ref" or "BNG_ref" field — shown when tapping a shape on the map.</div>
+      </FieldRow>
+      <div className="modal-actions">
+        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" onClick={()=>onConfirm(labelField)}>Add layer</button>
+      </div>
+    </Modal>
   );
 }
 
