@@ -623,7 +623,11 @@ function App() {
     return <React.Fragment>
       <ProjectsScreen projects={projects} identity={identity} onSwitchUser={()=>setShowIdentityModal(true)}
         onAddProject={addProject} onOpenProject={id=>setView({screen:'sessions', projectId:id})}
-        onSetArchived={setProjectArchived} onDeleteProject={deleteProject} />
+        onSetArchived={setProjectArchived} onDeleteProject={deleteProject}
+        onJoinLink={(join)=>{
+          const [projectId, sessionId] = join.split('.');
+          setView({ screen: 'session', projectId, sessionId, viaJoin: true });
+        }} />
       {switchUserModal}
     </React.Fragment>;
   }
@@ -682,14 +686,37 @@ function App() {
 /* ============================================================
    PROJECTS SCREEN
    ============================================================ */
-function ProjectsScreen({ projects, identity, onSwitchUser, onAddProject, onOpenProject, onSetArchived, onDeleteProject }) {
+function ProjectsScreen({ projects, identity, onSwitchUser, onAddProject, onOpenProject, onSetArchived, onDeleteProject, onJoinLink }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [showJoin, setShowJoin] = useState(false);
+  const [joinInput, setJoinInput] = useState('');
+  const [joinError, setJoinError] = useState(false);
   const [name, setName] = useState('');
   const [filter, setFilter] = useState('active'); // active | archived
   const [manageId, setManageId] = useState(null);
 
   const filtered = projects.filter(p => filter === 'archived' ? !!p.archived : !p.archived);
   const archivedCount = projects.filter(p => p.archived).length;
+
+  function handleJoin() {
+    const val = joinInput.trim();
+    // Accept either a full URL containing ?join=X.Y, or just "X.Y" pasted directly
+    let join = null;
+    try {
+      const url = new URL(val);
+      join = url.searchParams.get('join');
+    } catch (e) {
+      if (val.includes('.')) join = val;
+    }
+    if (join && join.includes('.')) {
+      setShowJoin(false);
+      setJoinInput('');
+      setJoinError(false);
+      onJoinLink(join);
+    } else {
+      setJoinError(true);
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -727,7 +754,25 @@ function ProjectsScreen({ projects, identity, onSwitchUser, onAddProject, onOpen
             </div>
           ))}
         </div>
+        {filter === 'active' && (
+          <button className="btn btn-secondary btn-full" style={{marginTop:12}} onClick={()=>setShowJoin(true)}>
+            <IconQR/> Join a session with a link or code
+          </button>
+        )}
       </div>
+      {showJoin && (
+        <Modal title="Join a session" onClose={()=>setShowJoin(false)}>
+          <p className="modal-text" style={{marginBottom:10}}>
+            Paste the link your coordinator shared, or scan their QR code with your camera app and open the link it shows.
+          </p>
+          <input className="text-input" placeholder="https://...?join=..." value={joinInput} onChange={e=>{ setJoinInput(e.target.value); setJoinError(false); }} autoFocus />
+          {joinError && <div className="field-hint field-hint-error">That doesn't look like a valid session link.</div>}
+          <div className="modal-actions">
+            <button className="btn btn-secondary" onClick={()=>setShowJoin(false)}>Cancel</button>
+            <button className="btn btn-primary" disabled={!joinInput.trim()} onClick={handleJoin}>Join</button>
+          </div>
+        </Modal>
+      )}
       {showAdd && (
         <Modal title="New project" onClose={()=>setShowAdd(false)}>
           <label className="field-label">Project name</label>
@@ -1096,6 +1141,7 @@ function SetupTab({ session, onUpdate, project, identity, sync }) {
 function SurveyorAccessSection({ project, session }) {
   const qrRef = useRef(null);
   const [copied, setCopied] = useState(false);
+  const [syncCheck, setSyncCheck] = useState('checking'); // checking | ok | missing | unavailable
   const joinUrl = `${window.location.origin}${window.location.pathname}?join=${project.id}.${session.id}`;
 
   useEffect(() => {
@@ -1110,6 +1156,14 @@ function SurveyorAccessSection({ project, session }) {
       correctLevel: window.QRCode.CorrectLevel.M
     });
   }, [joinUrl]);
+
+  useEffect(() => {
+    if (!fbDb) { setSyncCheck('unavailable'); return; }
+    setSyncCheck('checking');
+    fbDb.ref(`sync/projects/${project.id}/sessions/${session.id}`).once('value')
+      .then(snap => setSyncCheck(snap.exists() ? 'ok' : 'missing'))
+      .catch(() => setSyncCheck('unavailable'));
+  }, [project.id, session.id]);
 
   function copyLink() {
     navigator.clipboard?.writeText(joinUrl).then(() => {
@@ -1129,6 +1183,23 @@ function SurveyorAccessSection({ project, session }) {
       <div className="inline-field">
         <input className="text-input" readOnly value={joinUrl} style={{fontFamily:'var(--font-mono)', fontSize:12}} onClick={e=>e.target.select()} />
         <button className="btn btn-secondary btn-small" onClick={copyLink}><IconCopy/> {copied ? 'Copied' : 'Copy'}</button>
+      </div>
+      <div style={{marginTop:8}}>
+        {syncCheck === 'checking' && <div className="field-hint">Checking link is reachable...</div>}
+        {syncCheck === 'ok' && <div className="field-hint" style={{color:'var(--teal)'}}>✓ This session is reachable via the link above.</div>}
+        {syncCheck === 'missing' && (
+          <div>
+            <div className="field-hint field-hint-error">This session hasn't synced yet — the link may not work until it does.</div>
+            <button className="btn btn-secondary btn-small btn-full" style={{marginTop:6}} onClick={()=>{
+              if (fbDb) {
+                fbDb.ref(`sync/projects/${project.id}`).update({ name: project.name, archived: !!project.archived, createdAt: project.createdAt, updatedAt: Date.now() });
+                fbDb.ref(`sync/projects/${project.id}/sessions/${session.id}`).update({ label: session.label, date: session.date, status: session.status, createdAt: session.createdAt, updatedAt: Date.now() })
+                  .then(() => setSyncCheck('ok')).catch(() => setSyncCheck('unavailable'));
+              }
+            }}>Retry sync</button>
+          </div>
+        )}
+        {syncCheck === 'unavailable' && <div className="field-hint field-hint-error">Couldn't reach the sync server — check your internet connection.</div>}
       </div>
     </Section>
   );
