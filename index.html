@@ -435,6 +435,100 @@ function useFirebaseSync(projectId, sessionId, session, onUpdate, identity) {
 }
 
 /* ============================================================
+   PROJECT INDEX SYNC
+   ============================================================
+   Syncs a lightweight "directory" of projects and sessions (id, name,
+   label, date, status, archived — NOT full content) so every device
+   knows what projects/sessions exist, can list them, and can resolve
+   join links for sessions created on other devices. Full session
+   content (equipment/observations/etc) syncs separately via
+   useFirebaseSync once a session is opened.
+   ============================================================ */
+function useProjectIndexSync(projects, setData) {
+  const [indexLoaded, setIndexLoaded] = useState(!fbDb); // true immediately if no Firebase
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
+
+  useEffect(() => {
+    if (!fbDb) return;
+    const ref = fbDb.ref('sync/projects');
+    const handler = (snap) => {
+      const remote = snap.val() || {};
+      setData(d => {
+        const projects = d.projects || [];
+        const byId = {};
+        projects.forEach(p => { byId[p.id] = p; });
+        let changed = false;
+
+        Object.entries(remote).forEach(([pid, rp]) => {
+          const remoteSessions = rp.sessions || {};
+          if (!byId[pid]) {
+            // New project from another device — create local shell
+            byId[pid] = {
+              id: pid, name: rp.name, archived: !!rp.archived, createdAt: rp.createdAt || Date.now(),
+              sessions: Object.entries(remoteSessions).map(([sid, rs]) => ({
+                id: sid, label: rs.label, date: rs.date, status: rs.status, createdAt: rs.createdAt || Date.now(),
+                surveyStart:'', surveyEnd:'', sunset:'', weather:{mode:'auto',temp:'',wind:'',cloud:'',precip:''},
+                sitePhoto:null, notes:'', equipment:[], observations:[], surveyors:[], referenceLayers:[],
+              }))
+            };
+            changed = true;
+          } else {
+            const local = byId[pid];
+            let proj = local;
+            if ((rp.updatedAt || 0) > (local.indexUpdatedAt || 0)) {
+              proj = { ...local, name: rp.name, archived: !!rp.archived, indexUpdatedAt: rp.updatedAt };
+              changed = true;
+            }
+            const localSessions = proj.sessions || [];
+            const sessByid = {};
+            localSessions.forEach(s => { sessByid[s.id] = s; });
+            Object.entries(remoteSessions).forEach(([sid, rs]) => {
+              if (!sessByid[sid]) {
+                sessByid[sid] = {
+                  id: sid, label: rs.label, date: rs.date, status: rs.status, createdAt: rs.createdAt || Date.now(),
+                  surveyStart:'', surveyEnd:'', sunset:'', weather:{mode:'auto',temp:'',wind:'',cloud:'',precip:''},
+                  sitePhoto:null, notes:'', equipment:[], observations:[], surveyors:[], referenceLayers:[],
+                };
+                changed = true;
+              } else if ((rs.updatedAt || 0) > (sessByid[sid].indexUpdatedAt || 0)) {
+                sessByid[sid] = { ...sessByid[sid], label: rs.label, date: rs.date, status: rs.status, indexUpdatedAt: rs.updatedAt };
+                changed = true;
+              }
+            });
+            if (changed) proj = { ...proj, sessions: Object.values(sessByid) };
+            byId[pid] = proj;
+          }
+        });
+
+        if (!changed) return d;
+        return { ...d, projects: Object.values(byId) };
+      });
+      setIndexLoaded(true);
+    };
+    ref.on('value', handler);
+    return () => ref.off('value', handler);
+  }, []);
+
+  function pushProjectIndex(project) {
+    if (!fbDb) return;
+    fbDb.ref(`sync/projects/${project.id}`).update({
+      name: project.name, archived: !!project.archived,
+      createdAt: project.createdAt, updatedAt: Date.now()
+    }).catch(()=>{});
+  }
+  function pushSessionIndex(projectId, session) {
+    if (!fbDb) return;
+    fbDb.ref(`sync/projects/${projectId}/sessions/${session.id}`).update({
+      label: session.label, date: session.date, status: session.status,
+      createdAt: session.createdAt, updatedAt: Date.now()
+    }).catch(()=>{});
+  }
+
+  return { indexLoaded: indexLoaded || !fbDb, pushProjectIndex, pushSessionIndex };
+}
+
+/* ============================================================
    ICONS (minimal inline SVGs, no external icon lib needed)
    ============================================================ */
 const Icon = ({ d, viewBox="0 0 24 24" }) => (
@@ -477,21 +571,34 @@ function App() {
   });
   useEffect(() => saveData(data), [data]);
   const projects = data.projects || [];
+  const projectIndex = useProjectIndexSync(projects, setData);
 
   function addProject(name) {
-    setData(d => ({ ...d, projects: [...d.projects, { id: uid(), name, createdAt: Date.now(), archived: false, sessions: [] }] }));
+    const project = { id: uid(), name, createdAt: Date.now(), archived: false, sessions: [] };
+    setData(d => ({ ...d, projects: [...d.projects, project] }));
+    projectIndex.pushProjectIndex(project);
   }
   function setProjectArchived(projectId, archived) {
     setData(d => ({ ...d, projects: d.projects.map(p => p.id===projectId ? {...p, archived} : p) }));
+    const p = projects.find(p=>p.id===projectId);
+    if (p) projectIndex.pushProjectIndex({ ...p, archived });
   }
   function deleteProject(projectId) {
     setData(d => ({ ...d, projects: d.projects.filter(p => p.id !== projectId) }));
+    if (fbDb) fbDb.ref(`sync/projects/${projectId}`).remove().catch(()=>{});
   }
   function addSession(projectId, s) {
     setData(d => ({ ...d, projects: d.projects.map(p => p.id===projectId ? {...p, sessions:[...(p.sessions||[]), s]} : p) }));
+    projectIndex.pushSessionIndex(projectId, s);
   }
   function updateSession(projectId, sessionId, updates) {
     setData(d => ({ ...d, projects: d.projects.map(p => p.id!==projectId ? p : {...p, sessions: p.sessions.map(s => s.id===sessionId ? {...s, ...updates} : s)}) }));
+    // Keep the lightweight index in sync when label/date/status change
+    if ('label' in updates || 'date' in updates || 'status' in updates) {
+      const p = projects.find(p=>p.id===projectId);
+      const s = p && p.sessions.find(s=>s.id===sessionId);
+      if (s) projectIndex.pushSessionIndex(projectId, { ...s, ...updates });
+    }
   }
   function getSession(projectId, sessionId) {
     const p = projects.find(p=>p.id===projectId);
@@ -533,12 +640,29 @@ function App() {
     const project = projects.find(p=>p.id===view.projectId);
     const session = getSession(view.projectId, view.sessionId);
     if (!project || !session) {
+      if (!projectIndex.indexLoaded) {
+        return <React.Fragment>
+          <div className="app-shell">
+            <Header title="Bat Survey" subtitle="Connecting..." identity={identity} onSwitchUser={()=>setShowIdentityModal(true)} />
+            <div className="content">
+              <div className="empty-state">
+                <div className="spinner" style={{width:28, height:28, borderWidth:3, margin:'0 auto 16px'}} />
+                <div className="empty-title">Connecting to session</div>
+                <div className="empty-text">Looking up this session — this may take a moment.</div>
+              </div>
+            </div>
+          </div>
+          {switchUserModal}
+        </React.Fragment>;
+      }
       return <React.Fragment>
         <div className="app-shell">
           <Header title="Bat Survey" subtitle="Session not found" identity={identity} onSwitchUser={()=>setShowIdentityModal(true)} />
           <div className="content">
             <EmptyState icon={<IconMapPin/>} title="Session not found"
-              text="This link doesn't match a session on this device yet. If you're a surveyor joining via a shared link, make sure the coordinator's data has synced to this device." />
+              text={fbDb
+                ? "This session couldn't be found. Check the link is correct, or ask your coordinator to confirm it's still active."
+                : "This device has no internet connection and hasn't seen this session before. Connect to the internet to join for the first time."} />
             <button className="btn btn-secondary btn-full" onClick={()=>setView({screen:'projects'})} style={{marginTop:12}}>Go to projects</button>
           </div>
         </div>
