@@ -34,7 +34,8 @@ html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-
 .back-btn { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:var(--text); cursor:pointer; flex-shrink:0; font-size:18px; }
 .content { flex:1; padding:14px 16px 100px; overflow-y:auto; }
 .tab-bar { display:flex; border-bottom:1px solid var(--border); background:var(--bg-elevated); }
-.sync-indicator { display:flex; align-items:center; gap:6px; justify-content:center; font-size:11px; font-weight:600; padding:6px 12px; background:var(--bg-elevated); border-bottom:1px solid var(--border); position:relative; }
+.sync-indicator { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:6px 12px; background:var(--bg-elevated); border-bottom:1px solid var(--border); }
+.sync-indicator-status { display:flex; align-items:center; gap:6px; flex:1; justify-content:center; }
 .sync-on { color:var(--teal); }
 .sync-off { color:var(--text-faint); }
 .sync-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
@@ -42,14 +43,14 @@ html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-
 
 /* ---- Panic button ---- */
 .panic-btn {
-  position:absolute; right:10px; top:50%; transform:translateY(-50%);
-  display:flex; align-items:center; gap:5px;
-  background:var(--danger-dim); color:var(--danger); border:1px solid var(--danger);
-  border-radius:100px; padding:4px 10px; font-size:11px; font-weight:700;
+  display:flex; align-items:center; gap:5px; flex-shrink:0;
+  background:var(--danger); color:#fff; border:none;
+  border-radius:100px; padding:6px 12px; font-size:11px; font-weight:700;
   text-transform:uppercase; letter-spacing:0.05em; cursor:pointer;
 }
 .panic-btn svg { width:13px; height:13px; }
-.panic-btn:active { transform:translateY(-50%) scale(0.96); }
+.panic-btn:active { transform:scale(0.96); }
+.panic-btn:disabled { opacity:0.4; cursor:not-allowed; }
 
 /* ---- Alert banners ---- */
 .alert-banner {
@@ -1100,8 +1101,10 @@ function SessionScreen({ project, session, identity, onSwitchUser, onBack, onUpd
       )}
 
       {sync.available && (
-        <div className={`sync-indicator ${sync.connected ? 'sync-on' : 'sync-off'}`}>
-          <span className="sync-dot" /> {sync.connected ? 'Synced with team' : 'Offline — changes saved locally'}
+        <div className="sync-indicator">
+          <span className={`sync-indicator-status ${sync.connected ? 'sync-on' : 'sync-off'}`}>
+            <span className="sync-dot" /> {sync.connected ? 'Synced with team' : 'Offline — changes saved locally'}
+          </span>
           {!myAlertActive && (
             <button className="panic-btn" onClick={()=>setShowAlertConfirm(true)} disabled={!sync.available}>
               <IconAlert/> Alert
