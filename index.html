@@ -2269,6 +2269,7 @@ function BearingDial({ value, onChange }) {
    ============================================================ */
 function ObserveTab({ session, onUpdate, identity, sync }) {
   const [showForm, setShowForm] = useState(false);
+  const [editingObservation, setEditingObservation] = useState(null);
   const [gpsPos, setGpsPos] = useState(null);
   const [analysisMode, setAnalysisMode] = useState(false);
   const observations = session.observations || [];
@@ -2293,6 +2294,7 @@ function ObserveTab({ session, onUpdate, identity, sync }) {
     const updated = exists ? observations.map(o => o.id===obs.id ? stamped : o) : [...observations, stamped];
     onUpdate({ observations: updated, lastEquipmentId: obs.equipmentId });
     setShowForm(false);
+    setEditingObservation(null);
     if (sync) sync.pushObservation(stamped);
   }
   function deleteObservation(id) {
@@ -2329,22 +2331,26 @@ function ObserveTab({ session, onUpdate, identity, sync }) {
       <div className="card-list">
         {sorted.map(obs => {
           const canDelete = identity.isSuperuser || obs.addedBy === identity.name || !obs.addedBy;
-          return <ObservationCard key={obs.id} obs={obs} equipment={equipment} onDelete={canDelete ? ()=>deleteObservation(obs.id) : null} />;
+          return <ObservationCard key={obs.id} obs={obs} equipment={equipment} onDelete={canDelete ? ()=>deleteObservation(obs.id) : null} onTap={()=>setEditingObservation(obs)} />;
         })}
       </div>
       {showForm && (
         <ObservationForm gpsPos={gpsPos} equipment={equipment} lastEquipmentId={session.lastEquipmentId}
           identity={identity} onSave={saveObservation} onClose={()=>setShowForm(false)} />
       )}
+      {editingObservation && (
+        <ObservationForm observation={editingObservation} gpsPos={gpsPos} equipment={equipment} lastEquipmentId={session.lastEquipmentId}
+          identity={identity} onSave={saveObservation} onClose={()=>setEditingObservation(null)} />
+      )}
     </div>
   );
 }
 
-function ObservationCard({ obs, equipment, onDelete }) {
+function ObservationCard({ obs, equipment, onDelete, onTap }) {
   const eq = equipment.find(e => e.id === obs.equipmentId);
   const color = ACTIVITY_COLORS[obs.activity] || ACTIVITY_COLORS.unknown;
   return (
-    <div className="card obs-card">
+    <div className="card obs-card card-tap" onClick={onTap} role="button" tabIndex={0}>
       <div className="obs-color-bar" style={{background:color}} />
       <div className="card-main">
         <div className="card-title">{obs.species}</div>
@@ -2358,7 +2364,7 @@ function ObservationCard({ obs, equipment, onDelete }) {
         </div>
         {obs.notes && <div className="obs-notes">{obs.notes}</div>}
       </div>
-      {onDelete && <button className="btn btn-icon btn-small" onClick={onDelete} aria-label="Delete observation"><IconTrash/></button>}
+      {onDelete && <button className="btn btn-icon btn-small" onClick={(e)=>{ e.stopPropagation(); onDelete(); }} aria-label="Delete observation"><IconTrash/></button>}
     </div>
   );
 }
@@ -2506,17 +2512,21 @@ function PointPickerMap({ initialCoords, centerHint, onPick, onClose }) {
   );
 }
 
-function ObservationForm({ gpsPos, equipment, lastEquipmentId, identity, onSave, onClose }) {
-  const [time, setTime] = useState(nowTimeStr());
-  const [species, setSpecies] = useState(UK_SPECIES[0]);
-  const [activity, setActivity] = useState('emergence');
-  const [equipmentId, setEquipmentId] = useState(lastEquipmentId || (equipment[0] ? equipment[0].id : ''));
-  const [notes, setNotes] = useState('');
-  const [locMode, setLocMode] = useState('gps');
-  const [manualCoords, setManualCoords] = useState(gpsPos || null);
+function ObservationForm({ observation, gpsPos, equipment, lastEquipmentId, identity, onSave, onClose }) {
+  const isEdit = !!observation;
+  const canEdit = !isEdit || identity.isSuperuser || observation.addedBy === identity.name || !observation.addedBy;
+  const readOnly = isEdit && !canEdit;
+
+  const [time, setTime] = useState(observation ? observation.time : nowTimeStr());
+  const [species, setSpecies] = useState(observation ? observation.species : UK_SPECIES[0]);
+  const [activity, setActivity] = useState(observation ? observation.activity : 'emergence');
+  const [equipmentId, setEquipmentId] = useState(observation ? (observation.equipmentId || '') : (lastEquipmentId || (equipment[0] ? equipment[0].id : '')));
+  const [notes, setNotes] = useState(observation ? (observation.notes || '') : '');
+  const [locMode, setLocMode] = useState(observation ? (observation.photoTap ? 'photo' : (observation.lat != null ? 'manual' : 'gps')) : 'gps');
+  const [manualCoords, setManualCoords] = useState(observation ? (observation.lat != null ? [observation.lat, observation.lon] : null) : (gpsPos || null));
   const [showPicker, setShowPicker] = useState(false);
-  const [photoTapEquipmentId, setPhotoTapEquipmentId] = useState('');
-  const [photoTapPos, setPhotoTapPos] = useState(null); // {x, y} as fractions 0-1
+  const [photoTapEquipmentId, setPhotoTapEquipmentId] = useState(observation && observation.photoTap ? (observation.equipmentId || '') : '');
+  const [photoTapPos, setPhotoTapPos] = useState(observation ? (observation.photoTap || null) : null); // {x, y} as fractions 0-1
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
@@ -2558,16 +2568,24 @@ function ObservationForm({ gpsPos, equipment, lastEquipmentId, identity, onSave,
     }
     const eq = equipment.find(e => e.id === (locMode === 'photo' ? photoTapEquipmentId : equipmentId));
     onSave({
-      id: uid(), time, lat: coords ? coords[0] : null, lon: coords ? coords[1] : null, species, activity,
+      id: observation ? observation.id : uid(),
+      time, lat: coords ? coords[0] : null, lon: coords ? coords[1] : null, species, activity,
       equipmentId: (locMode === 'photo' ? photoTapEquipmentId : equipmentId) || null,
       equipmentUnitId: eq ? eq.unitId : '',
       notes,
       photoTap: (locMode === 'photo' && photoTapPos) ? { x: photoTapPos.x, y: photoTapPos.y } : null,
+      ...(observation ? { addedBy: observation.addedBy, addedDuringAnalysis: observation.addedDuringAnalysis } : {}),
     });
   }
 
   return (
-    <Modal title="Add observation" onClose={onClose}>
+    <Modal title={isEdit ? 'Observation' : 'Add observation'} onClose={onClose}>
+      {readOnly && (
+        <div className="map-banner" style={{marginBottom:12}}>
+          <span style={{display:'inline-flex', alignItems:'center', gap:6}}><span style={{width:14,height:14}}><IconLock/></span> View only — recorded by {observation.addedBy}.</span>
+        </div>
+      )}
+      <fieldset disabled={readOnly} style={{border:'none', padding:0, margin:0}}>
       <FieldRow label="Time">
         <div className="inline-field">
           <input type="time" className="text-input" value={time} onChange={e=>setTime(e.target.value)} />
@@ -2579,7 +2597,7 @@ function ObservationForm({ gpsPos, equipment, lastEquipmentId, identity, onSave,
           <button className={`segment ${locMode==='gps'?'segment-active':''}`} onClick={()=>setLocMode('gps')}><IconCrosshair/> My position</button>
           <button className={`segment ${locMode==='manual'?'segment-active':''}`} onClick={()=>setLocMode('manual')}><IconMapPin/> Mark point</button>
         </div>
-        {equipmentWithPhotos.length > 0 && (
+        {(equipmentWithPhotos.length > 0 || locMode === 'photo') && (
           <div className="segmented" style={{marginTop:6}}>
             <button className={`segment ${locMode==='photo'?'segment-active':''}`} onClick={()=>setLocMode('photo')}><IconCamera/> From photo</button>
           </div>
@@ -2603,7 +2621,14 @@ function ObservationForm({ gpsPos, equipment, lastEquipmentId, identity, onSave,
             {!manualCoords && !gpsPos && <div style={{marginTop:6}}>No GPS fix yet — type coordinates, pick on map, or save without a location.</div>}
           </div>
         )}
-        {locMode==='photo' && (
+        {locMode==='photo' && equipmentWithPhotos.length === 0 && (
+          <div className="field-hint">
+            This observation was marked on an equipment photo that isn't available on this device (reference photos aren't synced between devices).
+            {coords && <div style={{marginTop:6}}>Recorded location: {coords[0].toFixed(6)}, {coords[1].toFixed(6)} (the equipment's position).</div>}
+            <div style={{marginTop:6}}>To change the location, switch to "My position" or "Mark point" above.</div>
+          </div>
+        )}
+        {locMode==='photo' && equipmentWithPhotos.length > 0 && (
           <div className="field-hint">
             <select className="text-input" value={photoTapEquipmentId} onChange={e=>{ setPhotoTapEquipmentId(e.target.value); setPhotoTapPos(null); }} style={{marginBottom:8}}>
               <option value="">— Choose equipment photo —</option>
@@ -2667,9 +2692,10 @@ function ObservationForm({ gpsPos, equipment, lastEquipmentId, identity, onSave,
         </div>
         {isRecording && <div className="field-hint">Listening... tap again to stop. Edit the text afterwards if needed.</div>}
       </FieldRow>
+      </fieldset>
       <div className="modal-actions">
-        <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary" onClick={handleSave}>Save observation</button>
+        <button className="btn btn-secondary" onClick={onClose}>{readOnly ? 'Close' : 'Cancel'}</button>
+        {!readOnly && <button className="btn btn-primary" onClick={handleSave}>{isEdit ? 'Save changes' : 'Save observation'}</button>}
       </div>
     </Modal>
   );
