@@ -34,11 +34,41 @@ html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-
 .back-btn { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:var(--text); cursor:pointer; flex-shrink:0; font-size:18px; }
 .content { flex:1; padding:14px 16px 100px; overflow-y:auto; }
 .tab-bar { display:flex; border-bottom:1px solid var(--border); background:var(--bg-elevated); }
-.sync-indicator { display:flex; align-items:center; gap:6px; justify-content:center; font-size:11px; font-weight:600; padding:6px 12px; background:var(--bg-elevated); border-bottom:1px solid var(--border); }
+.sync-indicator { display:flex; align-items:center; gap:6px; justify-content:center; font-size:11px; font-weight:600; padding:6px 12px; background:var(--bg-elevated); border-bottom:1px solid var(--border); position:relative; }
 .sync-on { color:var(--teal); }
 .sync-off { color:var(--text-faint); }
 .sync-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
 .sync-on .sync-dot { animation:pulse-dot 2s infinite; }
+
+/* ---- Panic button ---- */
+.panic-btn {
+  position:absolute; right:10px; top:50%; transform:translateY(-50%);
+  display:flex; align-items:center; gap:5px;
+  background:var(--danger-dim); color:var(--danger); border:1px solid var(--danger);
+  border-radius:100px; padding:4px 10px; font-size:11px; font-weight:700;
+  text-transform:uppercase; letter-spacing:0.05em; cursor:pointer;
+}
+.panic-btn svg { width:13px; height:13px; }
+.panic-btn:active { transform:translateY(-50%) scale(0.96); }
+
+/* ---- Alert banners ---- */
+.alert-banner {
+  display:flex; align-items:center; gap:10px; padding:10px 14px;
+  background:var(--danger); color:#fff; font-size:13px; font-weight:600;
+  cursor:pointer; animation:alert-flash 1s infinite;
+}
+.alert-banner-self {
+  background:var(--danger-dim); color:var(--danger); border-bottom:1px solid var(--danger);
+  cursor:default; animation:none; font-weight:600; font-size:12px;
+}
+.alert-banner-icon { width:20px; height:20px; flex-shrink:0; }
+.alert-banner-icon svg { width:20px; height:20px; }
+.alert-banner-text { flex:1; line-height:1.4; }
+.alert-banner .btn, .alert-banner-self .btn { flex-shrink:0; }
+@keyframes alert-flash {
+  0%, 100% { background:var(--danger); }
+  50% { background:#8a1a26; }
+}
 .tab-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 4px; background:none; border:none; border-bottom:2px solid transparent; color:var(--text-faint); font-size:11px; font-family:var(--font-body); font-weight:500; letter-spacing:0.02em; cursor:pointer; }
 .tab-btn svg { width:16px; height:16px; }
 .tab-btn-active { color:var(--accent); border-bottom-color:var(--accent); }
@@ -125,6 +155,12 @@ html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-
 .obs-marker-star { width:18px; height:18px; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); filter: drop-shadow(0 0 2px rgba(0,0,0,0.7)); }
 .surveyor-dot { width:16px; height:16px; border-radius:50%; background:var(--teal); border:2px solid #fff; box-shadow:0 0 0 6px rgba(79,184,168,0.25); animation:pulse-dot 2s infinite; position:relative; }
 .surveyor-dot-other { background:var(--accent); box-shadow:0 0 0 6px rgba(232,131,58,0.25); animation:none; }
+.surveyor-dot-alert { background:var(--danger); animation:alert-marker-flash 0.6s infinite; }
+.surveyor-dot-alert .surveyor-label { background:var(--danger); color:#fff; border-color:var(--danger); font-weight:800; }
+@keyframes alert-marker-flash {
+  0%, 100% { box-shadow:0 0 0 6px rgba(232,90,106,0.45); transform:scale(1); }
+  50% { box-shadow:0 0 0 12px rgba(232,90,106,0.15); transform:scale(1.15); }
+}
 .surveyor-label { position:absolute; top:-22px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:700; color:var(--text); background:var(--bg-elevated); border:1px solid var(--border); border-radius:4px; padding:1px 5px; white-space:nowrap; }
 @keyframes pulse-dot { 0%,100% { box-shadow:0 0 0 6px rgba(79,184,168,0.25); } 50% { box-shadow:0 0 0 10px rgba(79,184,168,0.08); } }
 .surveyor-dot-mini { width:12px!important; height:12px!important; border-radius:50%; background:var(--teal); border:2px solid #fff; }
@@ -356,10 +392,30 @@ function equipmentToGeoJSON(project, session) {
       properties: {
         site: project.name, unit_id: eq.unitId, kit: (KIT_TYPES[eq.kit]||{}).label || eq.kit,
         radius_m: eq.radius, bearing: eq.bearing, fov_deg: eq.fov, height_m: eq.height,
-        notes: eq.notes || '', added_by: eq.addedBy || ''
+        notes: eq.notes || '', added_by: eq.addedBy || '',
+        activated_at: eq.activatedAt || '', activated_by: eq.activatedBy || ''
       }
     }))
   };
+}
+const EQUIPMENT_CSV_HEADERS = ['project_name','survey_date','session_id','unit_id','kit','latitude','longitude','bearing','radius_m','fov_deg','height_m','activated_at','activated_by','added_by','notes'];
+function equipmentToCSVRows(project, session) {
+  return (session.equipment || []).map(eq => ({
+    project_name: project.name,
+    survey_date: session.date,
+    session_id: session.label,
+    unit_id: eq.unitId,
+    kit: (KIT_TYPES[eq.kit]||{}).label || eq.kit,
+    latitude: eq.lat, longitude: eq.lon,
+    bearing: eq.bearing != null ? eq.bearing : '',
+    radius_m: eq.radius != null ? eq.radius : '',
+    fov_deg: eq.fov != null ? eq.fov : '',
+    height_m: eq.height != null ? eq.height : '',
+    activated_at: eq.activatedAt || '',
+    activated_by: eq.activatedBy || '',
+    added_by: eq.addedBy || '',
+    notes: eq.notes || '',
+  }));
 }
 function downloadBlob(filename, content, mimeType) {
   const blob = new Blob([content], { type: mimeType });
@@ -468,7 +524,7 @@ function useFirebaseSync(projectId, sessionId, session, onUpdate, identity) {
       const others = {};
       const myKey = fbKey(identity.name);
       Object.entries(remote).forEach(([key, info]) => {
-        if (key !== myKey) others[info.displayName || key] = info;
+        if (key !== myKey) others[info.displayName || key] = { ...info, fbKey: key };
       });
       setOtherSurveyors(others);
     };
@@ -511,14 +567,28 @@ function useFirebaseSync(projectId, sessionId, session, onUpdate, identity) {
   function pushSurveyorPosition(lat, lon) {
     if (!fbDb) return;
     const key = syncKey(projectId, sessionId);
-    fbDb.ref(`${key}/surveyors/${fbKey(identity.name)}`).set({ lat, lon, lastUpdate: Date.now(), isSuperuser: !!identity.isSuperuser, displayName: identity.name }).catch(()=>{});
+    fbDb.ref(`${key}/surveyors/${fbKey(identity.name)}`).update({ lat, lon, lastUpdate: Date.now(), isSuperuser: !!identity.isSuperuser, displayName: identity.name }).catch(()=>{});
+  }
+  function pushSurveyorAlert(active) {
+    if (!fbDb) return Promise.reject(new Error('No connection'));
+    const key = syncKey(projectId, sessionId);
+    return fbDb.ref(`${key}/surveyors/${fbKey(identity.name)}`).update({
+      displayName: identity.name, isSuperuser: !!identity.isSuperuser,
+      alert: active ? { active: true, since: Date.now() } : { active: false }
+    });
+  }
+  function clearSurveyorAlert(surveyorKey) {
+    if (!fbDb) return;
+    const key = syncKey(projectId, sessionId);
+    fbDb.ref(`${key}/surveyors/${surveyorKey}/alert`).set({ active: false }).catch(()=>{});
   }
 
   return {
     connected: !!fbDb && connected,
     available: !!fbDb,
     otherSurveyors,
-    pushEquipment, removeEquipment, pushObservation, removeObservation, pushMeta, pushSurveyorPosition
+    pushEquipment, removeEquipment, pushObservation, removeObservation, pushMeta, pushSurveyorPosition,
+    pushSurveyorAlert, clearSurveyorAlert
   };
 }
 
@@ -639,6 +709,7 @@ const IconUser = () => <Icon d='<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4
 const IconLock = () => <Icon d='<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>' />;
 const IconQR = () => <Icon d='<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="14.01"/><line x1="14" y1="18" x2="14" y2="18.01"/><line x1="18" y1="14" x2="18" y2="14.01"/><line x1="18" y1="18" x2="18" y2="18.01"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/>' />;
 const IconCopy = () => <Icon d='<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>' />;
+const IconAlert = () => <Icon d='<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/>' />;
 
 /* ============================================================
    ROOT APP
@@ -981,16 +1052,64 @@ function StatusPill({ status }) {
    ============================================================ */
 function SessionScreen({ project, session, identity, onSwitchUser, onBack, onUpdate }) {
   const [tab, setTab] = useState(onBack ? 'setup' : 'map');
+  const [myAlertActive, setMyAlertActive] = useState(false);
+  const [showAlertConfirm, setShowAlertConfirm] = useState(false);
   const sync = useFirebaseSync(project.id, session.id, session, onUpdate, identity);
+  const activeAlerts = Object.entries(sync.otherSurveyors || {}).filter(([name, info]) => info.alert && info.alert.active);
+  const activeAlertNames = activeAlerts.map(([name])=>name).join(',');
+
+  // Vibrate when a new alert appears
+  const alertKeysRef = useRef('');
+  useEffect(() => {
+    const keys = activeAlerts.map(([name]) => name).sort().join(',');
+    if (keys && keys !== alertKeysRef.current && navigator.vibrate) {
+      navigator.vibrate([200, 100, 200, 100, 200]);
+    }
+    alertKeysRef.current = keys;
+  }, [activeAlertNames]);
+
   if (!session) return null;
+
+  function sendAlert() {
+    sync.pushSurveyorAlert(true).then(() => {
+      setMyAlertActive(true);
+      setShowAlertConfirm(false);
+    }).catch(() => {
+      alert('Could not send alert — check your internet connection and try again, or contact your coordinator by phone.');
+    });
+  }
+  function cancelAlert() {
+    sync.pushSurveyorAlert(false).then(() => setMyAlertActive(false)).catch(() => {});
+  }
+
   return (
     <div className="app-shell">
       <Header title={session.label} subtitle={project.name} onBack={onBack} identity={identity} onSwitchUser={onSwitchUser} />
+
+      {activeAlerts.map(([name, info]) => (
+        <AlertBanner key={name} name={name} info={info} identity={identity}
+          onGoToMap={()=>setTab('map')}
+          onClear={()=>sync.clearSurveyorAlert(info.fbKey)} />
+      ))}
+
+      {myAlertActive && (
+        <div className="alert-banner alert-banner-self">
+          <span className="alert-banner-text">Your alert is active — visible to other surveyors.</span>
+          <button className="btn btn-secondary btn-small" onClick={cancelAlert}>I'm OK — cancel</button>
+        </div>
+      )}
+
       {sync.available && (
         <div className={`sync-indicator ${sync.connected ? 'sync-on' : 'sync-off'}`}>
           <span className="sync-dot" /> {sync.connected ? 'Synced with team' : 'Offline — changes saved locally'}
+          {!myAlertActive && (
+            <button className="panic-btn" onClick={()=>setShowAlertConfirm(true)} disabled={!sync.available}>
+              <IconAlert/> Alert
+            </button>
+          )}
         </div>
       )}
+
       <div className="tab-bar">
         <TabButton active={tab==='setup'} onClick={()=>setTab('setup')} icon={<IconSettings/>} label="Setup" />
         <TabButton active={tab==='map'} onClick={()=>setTab('map')} icon={<IconMapPin/>} label="Map" />
@@ -999,12 +1118,24 @@ function SessionScreen({ project, session, identity, onSwitchUser, onBack, onUpd
       </div>
       <div className="content">
         {tab==='setup' && <SetupTab session={session} onUpdate={onUpdate} project={project} identity={identity} sync={sync} />}
-        {tab==='map' && <MapTab session={session} onUpdate={onUpdate} identity={identity} sync={sync} />}
+        {tab==='map' && <MapTab session={session} onUpdate={onUpdate} identity={identity} sync={sync} myAlertActive={myAlertActive} />}
         {tab==='observe' && <ObserveTab session={session} onUpdate={onUpdate} identity={identity} sync={sync} />}
         {tab==='export' && (identity.isSuperuser
           ? <ExportTab project={project} session={session} onUpdate={onUpdate} />
           : <LockedTab label="Export is available to coordinators only." />)}
       </div>
+
+      {showAlertConfirm && (
+        <Modal title="Send H&S alert?" onClose={()=>setShowAlertConfirm(false)}>
+          <p className="modal-text" style={{marginBottom:14}}>
+            This will show your location as a flashing alert on every other surveyor's map and screen, right now. Only use this if you need help.
+          </p>
+          <div className="modal-actions">
+            <button className="btn btn-secondary" onClick={()=>setShowAlertConfirm(false)}>Cancel</button>
+            <button className="btn btn-danger btn-full" onClick={sendAlert}>Yes, send alert</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -1044,7 +1175,12 @@ function ExportTab({ project, session, onUpdate }) {
   function generateCSV() {
     const rows = observationsToCSVRows(project, session);
     const csv = toCSV(rows, OBS_CSV_HEADERS);
-    downloadBlob(`${baseName}.csv`, csv, 'text/csv');
+    downloadBlob(`${baseName}_observations.csv`, csv, 'text/csv');
+    if (equipment.length > 0) {
+      const eqRows = equipmentToCSVRows(project, session);
+      const eqCsv = toCSV(eqRows, EQUIPMENT_CSV_HEADERS);
+      downloadBlob(`${baseName}_equipment.csv`, eqCsv, 'text/csv');
+    }
   }
 
   function generateGeoJSON() {
@@ -1106,12 +1242,14 @@ function ExportTab({ project, session, onUpdate }) {
       doc.text('Equipment', 14, y);
       y += 4;
       doc.autoTable({
-        startY: y, headStyles: { fillColor: [232,131,58] }, styles: { fontSize: 8 },
-        head: [['Unit', 'Kit', 'Bearing', 'Radius (m)', 'FOV (°)', 'Height (m)', 'Added by']],
+        startY: y, headStyles: { fillColor: [232,131,58] }, styles: { fontSize: 7 },
+        head: [['Unit', 'Kit', 'Bearing', 'Radius (m)', 'FOV (°)', 'Height (m)', 'Activated', 'Added by']],
         body: equipment.map(eq => [
           eq.unitId, (KIT_TYPES[eq.kit]||{}).label || eq.kit,
           eq.bearing != null ? `${Math.round(eq.bearing)}°` : '—',
-          eq.radius ?? '—', eq.fov ?? '—', eq.height ?? '—', eq.addedBy || '—'
+          eq.radius ?? '—', eq.fov ?? '—', eq.height ?? '—',
+          eq.activatedAt ? `${eq.activatedAt}${eq.activatedBy ? ` (${eq.activatedBy})` : ''}` : '—',
+          eq.addedBy || '—'
         ]),
       });
       y = doc.lastAutoTable.finalY + 8;
@@ -1158,7 +1296,7 @@ function ExportTab({ project, session, onUpdate }) {
     <div className="export-tab">
       <Section title="Export this session">
         <div className="field-hint" style={{marginBottom:12}}>
-          Files are named <code>{baseName}</code> and download to this device. Photos and reference layers are not included — they stay on each device for now.
+          Files are named <code>{baseName}_...</code> and download to this device. Photos and reference layers are not included — they stay on each device for now.
         </div>
         <CheckRow label="CSV — observations (spreadsheet)" checked={formats.csv} onChange={()=>toggleFormat('csv')} />
         <CheckRow label="GeoJSON — observations + equipment (for QGIS)" checked={formats.geojson} onChange={()=>toggleFormat('geojson')} />
@@ -1568,7 +1706,7 @@ function CloseSessionSection({ session, onUpdate }) {
 /* ============================================================
    MAP TAB
    ============================================================ */
-function MapTab({ session, onUpdate, identity, sync }) {
+function MapTab({ session, onUpdate, identity, sync, myAlertActive }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layersRef = useRef({ equipment: [], observations: [], reference: [], surveyor: null, otherSurveyors: {} });
@@ -1637,13 +1775,18 @@ function MapTab({ session, onUpdate, identity, sync }) {
   useEffect(() => {
     const map = mapInstanceRef.current, L = window.L;
     if (!map || !L || !gpsPos) return;
-    if (layersRef.current.surveyor) {
-      layersRef.current.surveyor.setLatLng(gpsPos);
+    const existing = layersRef.current.surveyor;
+    if (existing && existing._alertState === !!myAlertActive) {
+      existing.setLatLng(gpsPos);
     } else {
-      const icon = L.divIcon({ className:'', html:'<div class="surveyor-dot"></div>', iconSize:[20,20], iconAnchor:[10,10] });
-      layersRef.current.surveyor = L.marker(gpsPos, { icon, zIndexOffset: 1000 }).addTo(map);
+      if (existing) map.removeLayer(existing);
+      const markerClass = myAlertActive ? 'surveyor-dot surveyor-dot-alert' : 'surveyor-dot';
+      const icon = L.divIcon({ className:'', html:`<div class="${markerClass}"></div>`, iconSize:[20,20], iconAnchor:[10,10] });
+      const marker = L.marker(gpsPos, { icon, zIndexOffset: 1000 }).addTo(map);
+      marker._alertState = !!myAlertActive;
+      layersRef.current.surveyor = marker;
     }
-  }, [gpsPos]);
+  }, [gpsPos, myAlertActive]);
 
   // Render other surveyors' last-known positions (from sync)
   useEffect(() => {
@@ -1665,17 +1808,23 @@ function MapTab({ session, onUpdate, identity, sync }) {
       const pos = [info.lat, info.lon];
       const ageMin = Math.round((Date.now() - (info.lastUpdate || 0)) / 60000);
       const ageLabel = ageMin < 1 ? 'just now' : `${ageMin}m ago`;
-      if (existing[name]) {
+      const isAlert = !!(info.alert && info.alert.active);
+      const tooltipText = isAlert ? `${name} · ALERT · ${ageLabel}` : `${name} · ${ageLabel}`;
+
+      if (existing[name] && existing[name]._alertState === isAlert) {
         existing[name].setLatLng(pos);
-        existing[name].setTooltipContent(`${name} · ${ageLabel}`);
+        existing[name].setTooltipContent(tooltipText);
       } else {
+        if (existing[name]) map.removeLayer(existing[name]);
+        const markerClass = isAlert ? 'surveyor-dot surveyor-dot-alert' : 'surveyor-dot surveyor-dot-other';
         const icon = L.divIcon({
           className: '',
-          html: `<div class="surveyor-dot surveyor-dot-other"><span class="surveyor-label">${name}</span></div>`,
+          html: `<div class="${markerClass}"><span class="surveyor-label">${name}${isAlert ? ' ⚠' : ''}</span></div>`,
           iconSize: [20, 20], iconAnchor: [10, 10]
         });
-        const marker = L.marker(pos, { icon, zIndexOffset: 900 }).addTo(map);
-        marker.bindTooltip(`${name} · ${ageLabel}`, { permanent: false });
+        const marker = L.marker(pos, { icon, zIndexOffset: isAlert ? 1100 : 900 }).addTo(map);
+        marker.bindTooltip(tooltipText, { permanent: false });
+        marker._alertState = isAlert;
         existing[name] = marker;
       }
     });
@@ -1701,7 +1850,7 @@ function MapTab({ session, onUpdate, identity, sync }) {
         : `<div class="eq-marker eq-marker-circle" style="background:${color}"></div>`;
       const icon = L.divIcon({ className:'', html: markerHtml, iconSize:[18,18], iconAnchor:[9,9] });
       const marker = L.marker([eq.lat, eq.lon], { icon, zIndexOffset: 500 }).addTo(map);
-      marker.bindTooltip(eq.unitId || kitDef.label, { permanent: false });
+      marker.bindTooltip(eq.activatedAt ? `${eq.unitId || kitDef.label} · rec ${eq.activatedAt}` : (eq.unitId || kitDef.label), { permanent: false });
       marker.on('click', () => setEditingEquipment(eq));
       layersRef.current.equipment.push(marker);
     });
@@ -1881,6 +2030,10 @@ function MapTab({ session, onUpdate, identity, sync }) {
             <span className="legend-swatch legend-circle" style={{background:'var(--accent)', border:'2px solid #fff'}} />
             Other surveyors
           </div>
+          <div className="legend-item">
+            <span className="legend-swatch legend-circle" style={{background:'var(--danger)', border:'2px solid #fff'}} />
+            Alert — needs help
+          </div>
         </div>
       </div>
 
@@ -1889,6 +2042,7 @@ function MapTab({ session, onUpdate, identity, sync }) {
           equipment={editingEquipment}
           coords={editingEquipment ? [editingEquipment.lat, editingEquipment.lon] : pendingCoords}
           observations={observations}
+          identity={identity}
           onSave={saveEquipment}
           onDelete={editingEquipment ? ()=>deleteEquipment(editingEquipment.id) : null}
           onClose={()=>{ setEditingEquipment(null); setPendingCoords(null); }}
@@ -1934,7 +2088,7 @@ function ReferenceLayerImportModal({ pending, onConfirm, onClose }) {
   );
 }
 
-function EquipmentForm({ equipment, coords, observations, onSave, onDelete, onClose }) {
+function EquipmentForm({ equipment, coords, observations, identity, onSave, onDelete, onClose }) {
   const isEdit = !!equipment;
   const [unitId, setUnitId] = useState(equipment ? equipment.unitId : '');
   const [kit, setKit] = useState(equipment ? equipment.kit : 'DJI_M4T');
@@ -1944,6 +2098,7 @@ function EquipmentForm({ equipment, coords, observations, onSave, onDelete, onCl
   const [height, setHeight] = useState(equipment && equipment.height!=null ? equipment.height : '');
   const [notes, setNotes] = useState(equipment ? (equipment.notes||'') : '');
   const [photo, setPhoto] = useState(equipment ? (equipment.photo||null) : null);
+  const [activatedAt, setActivatedAt] = useState(equipment ? (equipment.activatedAt || '') : '');
   const [showAnnotated, setShowAnnotated] = useState(false);
   const kitDef = KIT_TYPES[kit];
   const photoInputRef = useRef(null);
@@ -1963,6 +2118,7 @@ function EquipmentForm({ equipment, coords, observations, onSave, onDelete, onCl
     reader.readAsDataURL(file);
   }
   function handleSave() {
+    const wasActivated = equipment && equipment.activatedAt;
     onSave({
       id: equipment ? equipment.id : uid(),
       unitId: unitId.trim() || kitDef.label,
@@ -1971,7 +2127,9 @@ function EquipmentForm({ equipment, coords, observations, onSave, onDelete, onCl
       fov: kitDef.shape==='square' ? null : Number(fov),
       radius: kitDef.shape==='square' ? null : Number(radius),
       height: height==='' ? null : Number(height),
-      notes, photo
+      notes, photo,
+      activatedAt: activatedAt || null,
+      activatedBy: activatedAt ? (activatedAt === (equipment && equipment.activatedAt) ? equipment.activatedBy : identity.name) : null,
     });
   }
 
@@ -2001,6 +2159,17 @@ function EquipmentForm({ equipment, coords, observations, onSave, onDelete, onCl
       )}
       <FieldRow label="Flight height (m) — optional, for future viewshed">
         <input type="number" className="text-input" placeholder="Leave blank if N/A" value={height} onChange={e=>setHeight(e.target.value)} />
+      </FieldRow>
+      <FieldRow label="Activated (recording started)">
+        <div className="inline-field">
+          <input type="time" className="text-input" value={activatedAt} onChange={e=>setActivatedAt(e.target.value)} />
+          <button className="btn btn-secondary btn-small" onClick={()=>setActivatedAt(nowTimeStr())}>Now</button>
+          {activatedAt && <button className="btn btn-icon btn-small" onClick={()=>setActivatedAt('')} aria-label="Clear"><IconX/></button>}
+        </div>
+        <div className="field-hint">
+          Tap "Now" the moment you press record on this unit — cameras often run on their own clock, so this helps correct for drift when reviewing footage later.
+          {equipment && equipment.activatedAt && equipment.activatedBy && <span> Last set by {equipment.activatedBy}.</span>}
+        </div>
       </FieldRow>
       <FieldRow label="Notes">
         <textarea className="text-input textarea" rows={2} value={notes} onChange={e=>setNotes(e.target.value)} />
@@ -2509,6 +2678,33 @@ function ObservationForm({ gpsPos, equipment, lastEquipmentId, identity, onSave,
 /* ============================================================
    SHARED UI
    ============================================================ */
+function AlertBanner({ name, info, identity, onGoToMap, onClear }) {
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => forceTick(x => x+1), 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  const since = info.alert && info.alert.since;
+  const ageMin = since ? Math.max(0, Math.round((Date.now() - since) / 60000)) : null;
+  const ageLabel = ageMin == null ? '' : ageMin < 1 ? 'just now' : `${ageMin}m ago`;
+
+  return (
+    <div className="alert-banner" onClick={onGoToMap}>
+      <span className="alert-banner-icon"><IconAlert/></span>
+      <span className="alert-banner-text">
+        <strong>{name}</strong> needs help{ageLabel ? ` — ${ageLabel}` : ''}
+        {info.lat != null && info.lon != null ? ' — tap to view location' : ''}
+      </span>
+      {identity.isSuperuser && (
+        <button className="btn btn-secondary btn-small" onClick={(e)=>{ e.stopPropagation(); if (confirm(`Clear ${name}'s alert? Only do this once you've confirmed they're safe.`)) onClear(); }}>
+          Clear
+        </button>
+      )}
+    </div>
+  );
+}
+
 function BrandBar() {
   return <div className="brand-bar">Aerial Ecology · BatAssist</div>;
 }
