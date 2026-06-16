@@ -1,3 +1,8 @@
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  document.body.innerHTML = '<pre style="color:#fff;background:#900;padding:16px;white-space:pre-wrap;font-size:14px;">JS ERROR:\n' + msg + '\nat ' + src + ':' + line + ':' + col + '\n' + (err && err.stack || '') + '</pre>';
+};
+</script>
 <!DOCTYPE html>
 <html lang="en">
 <head>
